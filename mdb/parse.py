@@ -13,7 +13,7 @@ __all__ = ('PathParser', 'path')
 ### Lexer
 
 def lex_path():
-    """Subset of <http://www.w3.org/TR/xpath/#exprlex>."""
+    """An XPath lexer; see parse_path() below."""
 
     tokens = [
         'MINUS', 'STAR', 'PLUS', 'DSLASH', 'DCOLON', 'DDOT',
@@ -121,7 +121,7 @@ def lex_path():
     return (tokens, lex.lex())
 
 
-### Compiler
+### Parser
 
 class node(list):
 
@@ -133,7 +133,17 @@ class node(list):
         return '<%s: %s>' % (self.tag, ' '.join(repr(e) for e in self))
 
 def parse_path(tokens):
-    """<http://www.w3.org/TR/xpath20/#nt-bnf>"""
+    """Make an XPath 2.0 parser <http://www.w3.org/TR/xpath20/#nt-bnf>
+
+    Reading the XPath grammar linked above is the best way to
+    understand this parser.
+
+    For the most part, productions are declared in the same order
+    they're defined in the XPath grammar.  Notable departures are the
+    use of a PLY precedence table for binary operations and some QName
+    productions (e.g. ElementDeclaration, AttributeName, etc) have
+    been elided together.
+    """
 
     def p_XPath(p):
         """XPath : Expr"""
