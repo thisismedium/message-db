@@ -1,5 +1,4 @@
 kind: Page
-title: About
 description: A page about this demo.
 content:
   <p>This is some content!</p>

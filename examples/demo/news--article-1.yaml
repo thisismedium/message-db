@@ -1,5 +1,4 @@
 kind: Page
-title: Article 1
 description: This is the first news article.
-content:
-  Read the news!
+content:  
+  <p>Read the news!</p>

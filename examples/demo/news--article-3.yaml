@@ -1,0 +1,4 @@
+kind: Page
+description: This is the third news article.
+content:
+  <p>More news coming soon ...</p>

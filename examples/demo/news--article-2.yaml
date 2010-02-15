@@ -1,0 +1,5 @@
+kind: Page
+description: This is the second news article.
+content:
+  <p>Google aggregates news articles <a
+  href="http://news.google.com/">here</a>.</p>
