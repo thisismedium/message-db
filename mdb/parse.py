@@ -72,7 +72,6 @@ def lex_path():
         'comment': 'KIND',
         'document-node': 'DOCNODE',
         'processing-instructions': 'PI',
-        'attribute': 'ATTR',
         'schema-attribute': 'SCHEMA',
         'element': 'ELEM',
         'schema-element': 'SCHEMA'
@@ -138,7 +137,7 @@ def parse_path(tokens, ast):
 
     def p_XPath(p):
         """XPath : Expr"""
-        p[0] = p[1]
+        p[0] = ast.XPath(p[1])
 
     def p_Expr(p):
         """Expr : ExprList"""
@@ -160,12 +159,8 @@ def parse_path(tokens, ast):
         p[0] = p[1]
 
     def p_ForExpr(p):
-        """ForExpr : SimpleForClause RETURN ExprSingle"""
-        p[0] = ast.For(p[1], p[2])
-
-    def p_SimpleForClause(p):
-        """SimpleForClause : FOR VarInExpr"""
-        p[0] = p[2]
+        """ForExpr : FOR VarInExpr RETURN ExprSingle"""
+        p[0] = ast.For(p[2], p[4])
 
     def p_VarInExpr(p):
         """VarInExpr : VarRef IN ExprSingle"""
@@ -177,11 +172,11 @@ def parse_path(tokens, ast):
 
     def p_QuantifiedExpr(p):
         """QuantifiedExpr : QUANTITY VarInExpr SATISFIES ExprSingle"""
-        p[0] = ast.Quantified([1], p[2], p[3])
+        p[0] = ast.Quantified(p[1], p[2], p[4])
 
     def p_IfExpr(p):
         """IfExpr : IF '(' Expr ')' THEN ExprSingle ELSE ExprSingle"""
-        p[0] = Ast.If(p[3], p[6], p[8])
+        p[0] = ast.If(p[3], p[6], p[8])
 
     def p_OrExpr(p):
         """OrExpr : AndExpr"""
@@ -258,8 +253,8 @@ def parse_path(tokens, ast):
         p[0] = p[1]
 
     def make_path_abbr(proc, axis, test):
-        ## 'axis:test()'
-        result = ast.Axis(axis, ast.Test(test), [])
+        ## 'axis::test()'
+        result = ast.Axis(axis, ast.NodeTest(ast.Name(None, test)), [])
         if proc:
             ## 'proc(axis::test())'
             result = ast.Filter(
@@ -268,8 +263,8 @@ def parse_path(tokens, ast):
         return result
 
     ## See <http://www.w3.org/TR/xpath20/#doc-xpath-PathExpr>
-    ROOT = make_path_abbr('root', 'self', 'node')
-    DESCENDANT = make_path_abbr(None, 'descendant-or-self', 'node')
+    ROOT = make_path_abbr('root', 'self', '*')
+    DESCENDANT = make_path_abbr(None, 'descendant-or-self', '*')
 
     def p_PathExpr_root(p):
         """PathExpr : '/'"""
@@ -314,11 +309,11 @@ def parse_path(tokens, ast):
 
     def p_AxisStep_parent(p):
         """AxisStep : DDOT PredicateList"""
-        p[0] = ast.Axis('parent', ast.Name(None, '*'), p[2])
+        p[0] = ast.Axis('parent', ast.NodeTest(ast.Name(None, '*')), p[2])
 
-    def p_AxisStep_self(p):
+    def p_AxisStep_child(p):
         """AxisStep : NodeTest PredicateList"""
-        p[0] = ast.Axis('self', p[1], p[2])
+        p[0] = ast.Axis('child', p[1], p[2])
 
     def p_NodeTest(p):
         """NodeTest : KindTest
@@ -328,7 +323,7 @@ def parse_path(tokens, ast):
     def p_NameTest(p):
         """NameTest : QName
                     | Wildcard"""
-        p[0] = p[1]
+        p[0] = ast.NodeTest(p[1])
 
     def p_Wildcard(p):
         """Wildcard : STAR"""
@@ -367,11 +362,14 @@ def parse_path(tokens, ast):
                        | FunctionCall"""
         p[0] = p[1]
 
-    def p_Literal(p):
+    def p_Literal_num(p):
         """Literal : INTEGER
-                   | DECIMAL
-                   | STRING"""
-        p[0] = p[1]
+                   | DECIMAL"""
+        p[0] = ast.Number(p[1])
+
+    def p_Literal_string(p):
+        """Literal : STRING"""
+        p[0] = ast.String(p[1])
 
     def p_VarRef(p):
         """VarRef : '$' AnyName"""
@@ -379,7 +377,7 @@ def parse_path(tokens, ast):
 
     def p_ParenExpr(p):
         """ParenExpr : '(' Expr ')'"""
-        p[0] = p[1]
+        p[0] = p[2]
 
     def p_ParenExpr_null(p):
         """ParenExpr : '(' ')'"""
@@ -447,7 +445,6 @@ def parse_path(tokens, ast):
     def p_KindTest(p):
         """KindTest : DocumentTest
                     | ElementTest
-                    | AttributeTest
                     | SchemaTest
                     | PITest
                     | SimpleKindTest"""
@@ -462,14 +459,6 @@ def parse_path(tokens, ast):
         """PITest : PI '(' AnyName ')'
                   | PI '(' STRING ')'"""
         p[0] = ast.Test(p[1], p[3])
-
-    def p_AttributeTest(p):
-        """AttributeTest : ATTR '(' NameOrWildcard ')'"""
-        p[0]= ast.Test(p[1], p[3])
-
-    def p_AttributeTest_typed(p):
-        """AttributeTest : ATTR '(' NameOrWildcard ',' AtomicType ')'"""
-        p[0] = ast.Test(p[1], p[3], ast.Type(p[5], False))
 
     def p_NameOrWildcard(p):
         """NameOrWildcard : AnyName
@@ -492,7 +481,6 @@ def parse_path(tokens, ast):
         """SimpleKindTest : KIND '(' ')'
                           | DOCNODE '(' ')'
                           | PI '(' ')'
-                          | ATTR '(' ')'
                           | ELEM '(' ')'"""
         p[0] = ast.Test(p[1])
 
@@ -536,7 +524,6 @@ def parse_path(tokens, ast):
                        | KIND
                        | DOCNODE
                        | PI
-                       | ATTR
                        | SCHEMA
                        | ELEM"""
         p[0] = ast.Name(None, p[1])
@@ -574,17 +561,22 @@ class AST(object):
     Expr = node("Expr")
     Filter = node("Filter")
     For = node("For")
+    If = node("If")
     Name = node("Name")
+    NodeTest = node("NodeTest")
+    Number = node("Number")
     Or = node("Or")
     Path = node("Path")
     Quantified = node("Quantified")
     Range = node("Range")
     Ref = node("Ref")
     SeqType = node("SeqType")
+    String = node("String")
     Test = node("Test")
     Type = node("Type")
     UnaryOp = node("UnaryOp")
     VarIn = node("VarIn")
+    XPath = node("XPath")
 
     del node
 
@@ -600,6 +592,9 @@ def parse(parser, lexer, data):
         return parser.parse(data, lexer=lexer)
     except BadToken as exc:
         tok = exc.args[0]
+        if not tok:
+            raise SyntaxError('Unexpected end of statement.')
+
         context = data[max(0, tok.lexpos - 15):tok.lexpos + len(tok.value)]
         if tok.lexpos > 15:
             context = '...%s' % context

@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+
+"""demo-server.py -- run path queries against a demo content tree"""
+
+import os, sys, mdb
+from mdb import datastore as ds
+
+def usage():
+    print __doc__
+    print 'usage: %s expression' % sys.argv[0]
+    sys.exit(1)
+
+def main(data, expr):
+    top = ds.init(data, os.path.basename(data))
+    query = mdb.query(expr)
+    print 'Result of %r:' % expr
+    result = query(top)
+    if isinstance(result, tuple):
+        for seq in result:
+            for item in seq:
+                print '    %r' % (item,)
+    else:
+        for item in query(top):
+            print '    %r' % (item,)
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        usage()
+    main(os.path.join(os.path.dirname(__file__), 'demo'), sys.argv[1])
