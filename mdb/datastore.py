@@ -11,6 +11,8 @@ from google.appengine.api import datastore_file_stub
 from google.appengine.api import apiproxy_stub_map
 from . import tree
 
+Key = db.Key
+
 
 ### Models
 

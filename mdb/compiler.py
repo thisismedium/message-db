@@ -148,7 +148,7 @@ def evaluator(parse, GLOBAL):
     return evaluate
 
 def compile_ast(node, filename='<string>', mode='eval'):
-    print ast.dump(ast.fix_missing_locations(node))
+    ## print ast.dump(ast.fix_missing_locations(node))
     return compile(ast.fix_missing_locations(node), filename, mode)
 
 
