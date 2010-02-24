@@ -316,7 +316,18 @@ def after(item):
 
 def unique(seq):
     seen = set()
-    for item in seq:
+    ## FIXME: hashable() is a workaround for ListProperty
+    for item in hashable(seq):
         if item not in seen:
             seen.add(item)
             yield item
+
+def hashable(seq):
+    for item in seq:
+        if isinstance(item, list):
+            item = tuple(item)
+        elif isinstance(item, set):
+            item = frozenset(item)
+        yield item
+
+

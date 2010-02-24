@@ -12,7 +12,7 @@ __all__ = ('PathParser', 'path')
 
 ### Lexer
 
-def lex_path():
+def Lexer():
     """An XPath lexer; see parse_path() below."""
 
     tokens = [
@@ -41,17 +41,10 @@ def lex_path():
         'is': 'CMP',
         'to': 'TO',
         'div': 'DIV',
-        'idiv': 'DIV',
         'mod': 'DIV',
         'union': 'UNION',
         'intersect': 'INTERSECT',
         'except': 'INTERSECT',
-        'of': 'OF',
-        'instance': 'INSTANCE',
-        'as': 'AS',
-        'treat': 'TREAT',
-        'castable': 'CASTABLE',
-        'cast': 'CAST',
         'child': 'AXIS',
         'descendant': 'AXIS',
         'attribute': 'AXIS',
@@ -64,17 +57,7 @@ def lex_path():
         'ancestor': 'AXIS',
         'preceeding-sibling': 'AXIS',
         'preceeding': 'AXIS',
-        'ancestor-or-self': 'AXIS',
-        'empty-sequence': 'EMPTYSEQ',
-        'item': 'ITEM',
-        'node': 'KIND',
-        'text': 'KIND',
-        'comment': 'KIND',
-        'document-node': 'DOCNODE',
-        'processing-instructions': 'PI',
-        'schema-attribute': 'SCHEMA',
-        'element': 'ELEM',
-        'schema-element': 'SCHEMA'
+        'ancestor-or-self': 'AXIS'
     }
 
     tokens.extend(set(reserved.itervalues()))
@@ -122,7 +105,7 @@ def lex_path():
 
 ### Parser
 
-def parse_path(tokens, ast):
+def Parser(tokens, ast):
     """Make an XPath 2.0 parser <http://www.w3.org/TR/xpath20/#nt-bnf>
 
     Reading the XPath grammar linked above is the best way to
@@ -135,9 +118,9 @@ def parse_path(tokens, ast):
     been elided together.
     """
 
-    def p_XPath(p):
-        """XPath : Expr"""
-        p[0] = ast.XPath(p[1])
+    def p_Path(p):
+        """Path : Expr"""
+        p[0] = ast.Path(p[1])
 
     def p_Expr(p):
         """Expr : ExprList"""
@@ -195,30 +178,18 @@ def parse_path(tokens, ast):
         p[0] = ast.And(p[1], p[3])
 
     def p_CmpExpr(p):
-        """CmpExpr : RangeExpr"""
+        """CmpExpr : BinOpExpr"""
         p[0] = p[1]
 
     def p_CmpExpr_many(p):
-        """CmpExpr : RangeExpr CMP RangeExpr"""
+        """CmpExpr : BinOpExpr CMP BinOpExpr"""
         p[0] = ast.CmpOp(p[2], p[1], p[3])
-
-    def p_RangeExpr(p):
-        """RangeExpr : BinOpExpr"""
-        p[0] = p[1]
-
-    def p_RangeExpr_many(p):
-        """RangeExpr : BinOpExpr TO BinOpExpr"""
-        p[0] = ast.Range(p[1], p[3])
 
     precedence = (
         ('left', 'PLUS', 'MINUS'),
         ('left', 'STAR', 'DIV'),
         ('left', 'UNION'),
         ('left', 'INTERSECT'),
-        ('left', 'INSTANCE'),
-        ('left', 'TREAT'),
-        ('left', 'CASTABLE'),
-        ('left', 'CAST'),
         ('right', 'UNARY')
     )
 
@@ -236,13 +207,6 @@ def parse_path(tokens, ast):
                      | BinOpExpr INTERSECT BinOpExpr"""
         p[0] = ast.BinOp(p[2], p[1], p[3])
 
-    def p_BinOpExpr_phrase(p):
-        """BinOpExpr : BinOpExpr INSTANCE OF SequenceType
-                     | BinOpExpr TREAT AS SequenceType
-                     | BinOpExpr CASTABLE AS SingleType
-                     | BinOpExpr CAST AS SingleType"""
-        p[0] = ast.BinOp(p[2], p[1], p[4])
-
     def p_UnaryExpr(p):
         """UnaryExpr : PLUS ValueExpr %prec UNARY
                      | MINUS ValueExpr %prec UNARY"""
@@ -254,12 +218,12 @@ def parse_path(tokens, ast):
 
     def make_path_abbr(proc, axis, test):
         ## 'axis::test()'
-        result = ast.Axis(axis, ast.NodeTest(ast.Name(None, test)), [])
+        result = ast.Axis(axis, ast.NodeTest(ast.Name(None, test)))
         if proc:
             ## 'proc(axis::test())'
             result = ast.Filter(
-                ast.Apply(ast.Name(None, proc), [ast.Path(result)]),
-                [])
+                ast.Apply(ast.Name(None, proc), [ast.PathExpr(result)])
+            )
         return result
 
     ## See <http://www.w3.org/TR/xpath20/#doc-xpath-PathExpr>
@@ -268,22 +232,23 @@ def parse_path(tokens, ast):
 
     def p_PathExpr_root(p):
         """PathExpr : '/'"""
-        p[0] = ast.Path(ROOT)
+        p[0] = ast.PathExpr(ROOT)
 
     def p_PathExpr_abs(p):
         """PathExpr : '/' RelativePathExpr"""
-        p[0] = ast.Path(ROOT, *p[2])
+        p[0] = ast.PathExpr(ROOT, *p[2])
 
     def p_PathExpr_abs_dslash(p):
         """PathExpr : DSLASH RelativePathExpr"""
-        p[0] = ast.Path(ROOT, DESCENDANT, *p[2])
+        p[0] = ast.PathExpr(ROOT, DESCENDANT, *p[2])
 
     def p_PathExpr_rel(p):
         """PathExpr : RelativePathExpr"""
-        p[0] = ast.Path(*p[1])
+        p[0] = ast.PathExpr(*p[1])
 
     def p_RelativePathExpr(p):
-        """RelativePathExpr : StepExpr"""
+        """RelativePathExpr : StepExpr
+                            | Predicate"""
         p[0] = [p[1]]
 
     def p_RelativePathExpr_slash(p):
@@ -294,30 +259,38 @@ def parse_path(tokens, ast):
         """RelativePathExpr : RelativePathExpr DSLASH StepExpr"""
         p[0] = extend(p[1], DESCENDANT, p[3])
 
+    def p_RelativePathExpr_pred(p):
+        """RelativePathExpr : RelativePathExpr Predicate"""
+        p[0] = extend(p[1], p[2])
+
     def p_StepExpr(p):
         """StepExpr : FilterExpr
                     | AxisStep"""
         p[0] = p[1]
 
     def p_AxisStep(p):
-        """AxisStep : AXIS DCOLON NodeTest PredicateList"""
-        p[0] = ast.Axis(p[1], p[3], p[4])
+        """AxisStep : AXIS DCOLON NodeTest"""
+        p[0] = ast.Axis(p[1], p[3])
 
     def p_AxisStep_attr(p):
-        """AxisStep : '@' NodeTest PredicateList"""
-        p[0] = ast.Axis('attribute', p[2], p[3])
+        """AxisStep : '@' NodeTest"""
+        p[0] = ast.Axis('attribute', p[2])
 
     def p_AxisStep_parent(p):
-        """AxisStep : DDOT PredicateList"""
-        p[0] = ast.Axis('parent', ast.NodeTest(ast.Name(None, '*')), p[2])
+        """AxisStep : DDOT"""
+        p[0] = ast.Axis('parent', ast.NodeTest(ast.Name(None, '*')))
 
     def p_AxisStep_child(p):
-        """AxisStep : NodeTest PredicateList"""
-        p[0] = ast.Axis('child', p[1], p[2])
+        """AxisStep : NodeTest"""
+        p[0] = ast.Axis('child', p[1])
+
+    # def p_NodeTest(p):
+    #     """NodeTest : KindTest
+    #                 | NameTest"""
+    #     p[0] = p[1]
 
     def p_NodeTest(p):
-        """NodeTest : KindTest
-                    | NameTest"""
+        """NodeTest : NameTest"""
         p[0] = p[1]
 
     def p_NameTest(p):
@@ -335,8 +308,8 @@ def parse_path(tokens, ast):
         p[0] = ast.Name(p[1], p[3])
 
     def p_FilterExpr(p):
-        """FilterExpr : PrimaryExpr PredicateList"""
-        p[0] = ast.Filter(p[1], p[2])
+        """FilterExpr : PrimaryExpr"""
+        p[0] = ast.Filter(p[1])
 
     def p_PredicateList(p):
         """PredicateList : PredicateList Predicate"""
@@ -352,7 +325,7 @@ def parse_path(tokens, ast):
 
     def p_Predicate(p):
         """Predicate : '[' Expr ']'"""
-        p[0] = p[2]
+        p[0] = ast.Predicate(p[2])
 
     def p_PrimaryExpr(p):
         """PrimaryExpr : Literal
@@ -403,86 +376,9 @@ def parse_path(tokens, ast):
         """Arguments : """
         p[0] = []
 
-    def p_SingleType(p):
-        """SingleType : AtomicType"""
-        p[0] = ast.Type(p[1], False)
-
-    def p_SingleType_maybe(p):
-        """SingleType : AtomicType '?'"""
-        p[0] = ast.Type(p[1], True)
-
-    def p_SequenceType(p):
-        """SequenceType : ItemType OccuranceIndicator"""
-        p[0] = ast.SeqType(p[1], p[2])
-
-    def p_SequenceType_one(p):
-        """SequenceType : ItemType"""
-        p[0] = ast.SeqType(p[1], None)
-
-    def p_SequenceType_empty(p):
-        """SequenceType : EMPTYSEQ '(' ')'"""
-        p[0] = ast.SeqType(ast.Test(p[1]), None)
-
-    def p_OccuranceIndicator(p):
-        """OccuranceIndicator : '?'
-                              | STAR
-                              | PLUS"""
-        p[0] = p[1]
-
-    def p_ItemType(p):
-        """ItemType : KindTest
-                    | AtomicType"""
-        p[0] = p[1]
-
-    def p_ItemType_item(p):
-        """ItemType : ITEM '(' ')'"""
-        p[0] = mode.Test(p[1])
-
-    def p_AtomicType(p):
-        """AtomicType : QName"""
-        p[0] = p[1]
-
-    def p_KindTest(p):
-        """KindTest : DocumentTest
-                    | ElementTest
-                    | SchemaTest
-                    | PITest
-                    | SimpleKindTest"""
-        p[0] = p[1]
-
-    def p_DocumentTest(p):
-        """DocumentTest : DOCNODE '(' ElementTest ')'
-                        | DOCNODE '(' SchemaTest ')'"""
-        p[0] = ast.Test(p[1], p[3])
-
-    def p_PITest(p):
-        """PITest : PI '(' AnyName ')'
-                  | PI '(' STRING ')'"""
-        p[0] = ast.Test(p[1], p[3])
-
-    def p_NameOrWildcard(p):
-        """NameOrWildcard : AnyName
-                          | STAR"""
-        p[0] = p[1]
-
-    def p_SchemaTest(p):
-        """SchemaTest : SCHEMA '(' AnyName ')'"""
-        p[0] = ast.Test(p[1], p[3])
-
-    def p_ElementTest(p):
-        """ElementTest : ELEM '(' NameOrWildcard ')'"""
-        p[0] = ast.Test(p[1], p[3])
-
-    def p_ElementTest_typed(p):
-        """ElementTest : ELEM '(' NameOrWildcard ',' SingleType ')'"""
-        p[0] = ast.Test(p[1], p[3], p[5])
-
-    def p_SimpleKindTest(p):
-        """SimpleKindTest : KIND '(' ')'
-                          | DOCNODE '(' ')'
-                          | PI '(' ')'
-                          | ELEM '(' ')'"""
-        p[0] = ast.Test(p[1])
+    # def p_KindTest(p):
+    #     """KindTest : FunctionCall"""
+    #     p[0] = p[1]
 
     def p_AnyName(p):
         """AnyName : QName
@@ -512,20 +408,7 @@ def parse_path(tokens, ast):
                        | DIV
                        | UNION
                        | INTERSECT
-                       | OF
-                       | INSTANCE
-                       | AS
-                       | TREAT
-                       | CASTABLE
-                       | CAST
-                       | AXIS
-                       | EMPTYSEQ
-                       | ITEM
-                       | KIND
-                       | DOCNODE
-                       | PI
-                       | SCHEMA
-                       | ELEM"""
+                       | AXIS"""
         p[0] = ast.Name(None, p[1])
 
     def p_error(p):
@@ -567,16 +450,13 @@ class AST(object):
     Number = node("Number")
     Or = node("Or")
     Path = node("Path")
+    PathExpr = node("PathExpr")
+    Predicate = node("Predicate")
     Quantified = node("Quantified")
-    Range = node("Range")
     Ref = node("Ref")
-    SeqType = node("SeqType")
     String = node("String")
-    Test = node("Test")
-    Type = node("Type")
     UnaryOp = node("UnaryOp")
     VarIn = node("VarIn")
-    XPath = node("XPath")
 
     del node
 
@@ -586,10 +466,10 @@ class AST(object):
 class BadToken(Exception):
     """Raised from the p_error() handler in the parser."""
 
-def parse(parser, lexer, data):
+def parse(parser, lexer, data, debug=False):
     """Wrap parser.parse to produce a decent error message."""
     try:
-        return parser.parse(data, lexer=lexer)
+        return parser.parse(data, lexer=lexer, debug=debug)
     except BadToken as exc:
         tok = exc.args[0]
         if not tok:
@@ -605,9 +485,9 @@ def parse(parser, lexer, data):
             context
         ))
 
-def PathParser(ast=AST):
-    (tokens, lexer) = lex_path()
-    parser = parse_path(tokens, ast)
-    return functools.partial(parse, parser, lexer)
+def PathParser(ast=AST, **kwargs):
+    (tokens, lexer) = Lexer()
+    parser = Parser(tokens, ast)
+    return functools.partial(parse, parser, lexer, **kwargs)
 
 path = PathParser()

@@ -12,7 +12,7 @@ __all__ = ('read', 'evaluate')
 
 ### AST
 
-def XPath(expr):
+def Path(expr):
     return ast.Expression(Op('XPath', expr))
 
 def Expr(*expr):
@@ -20,17 +20,15 @@ def Expr(*expr):
         return expr[0] if is_simple(expr[0]) else Op('sequence', expr[0])
     return ast.Tuple([Op('sequence', e) for e in expr], ast.Load())
 
-def Path(*groups):
-    if len(groups) == 1 and is_simple(groups[0]):
-        return groups[0]
-    return Op('path', *[s for g in groups for s in g])
+def PathExpr(*steps):
+    if len(steps) == 1 and is_simple(steps[0]):
+        return steps[0]
+    return Op('path', *steps)
 
-def Filter(primary, predicates):
-    if not predicates and is_simple(primary):
+def Filter(primary):
+    if is_simple(primary):
         return primary
-    result = [Op('filter', Thunk(primary))]
-    result.extend(Predicate(p) for p in predicates)
-    return result
+    return Op('filter', Thunk(primary))
 
 def is_simple(obj):
     return isinstance(obj, ast.Num)
@@ -41,10 +39,8 @@ def Predicate(pred):
 def ContextItem():
     return Op('focus')
 
-def Axis(name, test, predicates):
-    result = [Op(name, test)]
-    result.extend(Predicate(p) for p in predicates)
-    return result
+def Axis(name, test):
+    return Op(name, test)
 
 def NodeTest(test):
     test = test.id
@@ -65,9 +61,6 @@ def For(var_in, body):
 
 def VarIn(name, body):
     return (name, body)
-
-def Range(a, b):
-    return Op('to', a, b)
 
 def Quantified(quant, var_in, body):
     return Op(quant, For(var_in, body))

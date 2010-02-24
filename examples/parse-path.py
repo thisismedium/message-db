@@ -5,7 +5,7 @@
 Example: parse-path.py 'child::para[position()>1]'
 """
 
-import sys
+import sys, optparse
 from mdb import parse
 
 def usage():
@@ -13,10 +13,16 @@ def usage():
     print 'usage: %s expression' % sys.argv[0]
     sys.exit(1)
 
-def main(path):
-    print parse.path(path)
+def run(path, debug=False):
+    print parse.path(path, debug=debug)
+
+def main():
+    opt = optparse.OptionParser()
+    opt.add_option('-d', dest='debug', action='store_true', default=False)
+    (options, args) = opt.parse_args()
+    if len(args) != 1:
+        usage()
+    run(*args, **options.__dict__)
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        usage()
-    main(sys.argv[1])
+    main()
