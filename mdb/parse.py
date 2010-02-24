@@ -106,16 +106,20 @@ def Lexer():
 ### Parser
 
 def Parser(tokens, ast):
-    """Make an XPath 2.0 parser <http://www.w3.org/TR/xpath20/#nt-bnf>
+    """Make a path parser
 
-    Reading the XPath grammar linked above is the best way to
-    understand this parser.
+    The grammar is a looser form of XPath 2.0.  Reading the grammar
+    <http://www.w3.org/TR/xpath20/#nt-bnf> is a good way to understand
+    the overall design.  PLY can't express zero-or-more / one-or-more
+    productions compactly, so many of the one-liners in the XPath
+    grammar are broken across several productions here.
 
     For the most part, productions are declared in the same order
     they're defined in the XPath grammar.  Notable departures are the
-    use of a PLY precedence table for binary operations and some QName
-    productions (e.g. ElementDeclaration, AttributeName, etc) have
-    been elided together.
+    use of a PLY precedence table for binary operations, instance-of
+    cast and treat have been dropped, KindTest is generalized, and
+    Predicate is treated as a Step instead of as part of an Axis or
+    Filter.
     """
 
     def p_Path(p):
@@ -310,18 +314,6 @@ def Parser(tokens, ast):
     def p_FilterExpr(p):
         """FilterExpr : PrimaryExpr"""
         p[0] = ast.Filter(p[1])
-
-    def p_PredicateList(p):
-        """PredicateList : PredicateList Predicate"""
-        p[0] = extend(p[1], p[2])
-
-    def p_PredicateList_one(p):
-        """PredicateList : Predicate"""
-        p[0] = [p[1]]
-
-    def p_PredicateList_empty(p):
-        """PredicateList : """
-        p[0] = []
 
     def p_Predicate(p):
         """Predicate : '[' Expr ']'"""
