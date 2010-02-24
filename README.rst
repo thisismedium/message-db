@@ -30,3 +30,13 @@ python-xmpp-server::
   cd mdb
   python setup.py build
   sudo python setup.py develop
+
+BOSH
+----
+
+Install punjab, a twisted BOSH server::
+
+  sudo easy_install twisted
+  sudo easy_instll -f http://code.stanziq.com/punjab/releases/ punjab
+
+

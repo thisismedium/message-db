@@ -16,6 +16,9 @@ every = all
 
 kind = _ds.kind
 
+def get(*keys):
+    return _ds.get([k for f in keys for k in f])
+
 def root(seq):
     return unique(last(_tree.ascend(i), i) for i in seq)
 

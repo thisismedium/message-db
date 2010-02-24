@@ -1,8 +1,14 @@
 #!/usr/bin/env python
 
-"""demo-server.py -- serve up a demo content tree"""
+"""demo-server.py -- serve up a demo content tree
 
-import os, sys, mdb, json, xmpp, collections as coll
+This example answers path queries sent over XMPP.  A content tree is
+built from the YAML data in the "demo" directory.  When a path query
+is received the query is evaluated against the root of the content
+tree and matching items are returned in a JSON format.
+"""
+
+import os, sys, mdb, json, xmpp, base64, collections as coll
 from xmpp import xml
 from mdb import datastore as ds
 
@@ -11,6 +17,7 @@ def main(data):
     server = xmpp.Server({
         'plugins': [(QueryServer, { 'root': top })],
         'users': { 'user': 'secret' },
+        'host': 'localhost'
     })
     print 'Waiting for clients...'
     xmpp.start([xmpp.TCPServer(server).bind('127.0.0.1', 5222)])
@@ -23,14 +30,19 @@ class QueryServer(xmpp.Plugin):
     @xmpp.iq('{urn:message}query')
     def message_query(self, iq):
         assert iq.get('type') == 'get'
-        expr = xml.child(iq, '{urn:message}query/text()')
-        return self.iq('result', iq, self.E.query(
-            { 'xmlns': 'urn:message'},
-            dumps(mdb.query(expr)(self.root))
-        ))
+        expr = base64.b64decode(xml.child(iq, '{urn:message}query/text()'))
+        try:
+            result = dumps(mdb.query(expr)(self.root))
+            self.iq('result', iq, self.E.query({ 'xmlns': 'urn:message'}, result))
+        except SyntaxError as exc:
+            self.error(iq, 'modify', 'undefined-condition', str(exc))
+
+    @xmpp.stanza('presence')
+    def presence(self, elem):
+        pass
 
 def dumps(obj):
-    return json.dumps(dumps_value(obj))
+    return base64.b64encode(json.dumps(dumps_value(obj)))
 
 def dumps_value(obj):
     if isinstance(obj, ds.Item):

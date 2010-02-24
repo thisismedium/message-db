@@ -1,8 +1,16 @@
 #!/usr/bin/env python
 
-"""demo-client.py -- query the demo server"""
+"""demo-client.py -- query the demo server
 
-import os, sys, xmpp, socket
+Example:
+
+## In one terminal:
+> python demo-server.py
+## In another terminal:
+> python demo-client.py '*'
+"""
+
+import os, sys, xmpp, socket, base64
 from xmpp import xml
 
 def usage():
@@ -15,7 +23,7 @@ def main(query):
         'plugins': [(QueryClient, { 'query': query })],
         'username': 'user',
         'password': 'secret',
-        'host': socket.gethostname()
+        'host': 'localhost'
     })
     xmpp.start([xmpp.TCPClient(client).connect('127.0.0.1', 5222)])
 
@@ -27,12 +35,12 @@ class QueryClient(xmpp.Plugin):
     def send(self, query):
         self.iq('get', self.on_reply, self.E.query(
             { 'xmlns': 'urn:message' },
-            query
+            base64.b64encode(query)
         ))
 
     def on_reply(self, iq):
         assert iq.get('type') == 'result'
-        data = xml.child(iq, '{urn:message}query/text()')
+        data = base64.b64decode(xml.child(iq, '{urn:message}query/text()'))
         print 'Got reply:', data
         xmpp.loop().stop()
 

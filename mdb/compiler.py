@@ -17,23 +17,33 @@ def XPath(expr):
 
 def Expr(*expr):
     if len(expr) == 1:
-        return Op('sequence', expr[0])
+        return expr[0] if is_simple(expr[0]) else Op('sequence', expr[0])
     return ast.Tuple([Op('sequence', e) for e in expr], ast.Load())
 
 def Path(*groups):
+    if len(groups) == 1 and is_simple(groups[0]):
+        return groups[0]
     return Op('path', *[s for g in groups for s in g])
 
 def Filter(primary, predicates):
+    if not predicates and is_simple(primary):
+        return primary
     result = [Op('filter', Thunk(primary))]
-    result.extend(Op('predicate', Thunk(p)) for p in predicates)
+    result.extend(Predicate(p) for p in predicates)
     return result
+
+def is_simple(obj):
+    return isinstance(obj, ast.Num)
+
+def Predicate(pred):
+    return Op('predicate', pred if isinstance(pred, ast.Num) else Thunk(pred))
 
 def ContextItem():
     return Op('focus')
 
 def Axis(name, test, predicates):
     result = [Op(name, test)]
-    result.extend(Op('predicate', Thunk(p)) for p in predicates)
+    result.extend(Predicate(p) for p in predicates)
     return result
 
 def NodeTest(test):

@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 
-"""demo-server.py -- run path queries against a demo content tree"""
+"""demo-server.py -- run path queries against a demo content tree
+
+The is like demo-server/demo-client, but is not client-server.  It
+builts a content tree from the YAML in "demo" and evaluates a path
+query against the root of the tree.
+
+> python demo-query.py '//Page'
+"""
 
 import os, sys, mdb
 from mdb import datastore as ds

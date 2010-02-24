@@ -165,6 +165,8 @@ class Predicate(Step):
                 yield focus()
 
 def predicate(pred):
+    if isinstance(pred, int):
+        return fn.partial(Predicate, lambda: index() == pred)
     return fn.partial(Predicate, pred)
 
 

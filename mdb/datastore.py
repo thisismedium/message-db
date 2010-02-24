@@ -12,6 +12,7 @@ from google.appengine.api import apiproxy_stub_map
 from . import tree
 
 Key = db.Key
+get = db.get
 
 
 ### Models

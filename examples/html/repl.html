@@ -1,0 +1,78 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <title>Strophe.js Query REPL</title>
+  <link rel="stylesheet" type="text/css" href="repl.css" />
+  <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+  <script type="text/javascript" src="strophe.js"></script>
+  <script type="text/javascript" src="repl.js"></script>
+</head>
+<body id="doc">
+
+  <div id="hd"></div>
+
+  <div id="main">
+    <ul class="nav">
+      <li><a href="#response">Responses</a></li>
+      <li><a href="#log" class="active">Log</a></li>
+      <li><a href="#help">Help</a></li>
+    </ul>
+
+    <div id="output">
+      <div id="response" class="disabled panel"></div>
+      <div id="log" class="panel"></div>
+      <div id="help" class="disabled panel prose">
+        <h2>Connecting</h2>
+
+        <p>To connect, make sure that both the XMPP server and BOSH
+        server are running.  Enter the full JID
+        (e.g. name@example.net) and password you would normally use to
+        connect to the XMPP server.</p>
+
+        <h2>Queries</h2>
+
+        <p>The query syntax is based
+        on <a href="http://www.w3.org/TR/xpath20/">XPath 2.0</a>.
+        Lowercase words are interpreted as names (e.g. "/news" returns
+        the item named "news" that is a child of the root).  Uppercase
+        words are interpreted as types (e.g. "//Folder" returns all
+        Folders).  By default, a non-absolute path is resolved
+        relative to the root, so "/news" and "news" return the same
+        thing.</p>
+
+        <p>Here are some example queries:</p>
+        <table class="example">
+          <tr><td>.</td><td>The current item.</td></tr>
+          <tr><td>..</td><td>The parent item.</td></tr>
+          <tr><td>*</td><td>Children of the current item.</td></tr>
+          <tr><td>//.</td><td>Everything.</td></tr>
+          <tr><td>news</td><td>The items named "news".</td></tr>
+          <tr><td>news/Page</td><td>Children of "news" that are Pages.</td></tr>
+          <tr><td>news/descendant::*</td><td>All descendants of "news".</td></tr>
+          <tr><td>//.[@description]</td><td>Anything with a "description" property.</td></tr>
+        </table>
+
+      </div>
+    </div>
+
+    <form id="input" method="get">
+      <div id="login" class="panel">
+        <label for="jid">JID:</label>
+        <input type="text" name="jid" value="user@localhost" />
+        <label for="pass">Password:</label>
+        <input type="password" name="pass" value="secret" />
+      </div>
+      <div id="query" class="disabled panel">
+        <input name="prompt" type="text" value="//." />
+      </div>
+      <div id="status">
+        <input type="submit" id="connect" value="connect" />
+      </div>
+    </form>
+
+  </div>
+
+  <div id="ft"></div>
+
+</body>
+</html>

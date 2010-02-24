@@ -1,0 +1,124 @@
+@import url('reset-fonts-grids.css');
+@import url('base.css');
+
+html {
+    height: 100%;
+}
+
+body {
+    text-align: left;
+    height: 100%;
+}
+
+h1 {
+    font-weight: bold;
+    font-size: 1.5em;
+}
+
+.disabled {
+    display: none !important;
+}
+
+#hd {
+    margin-bottom: 1em;
+}
+
+#main {
+    height: 80%;
+}
+
+    #main ul.nav {
+	text-align: right;
+	margin-bottom: 0.5em;
+    }
+
+    #main ul.nav li {
+	display: inline-block;
+    }
+
+    	#main ul.nav a {
+	    font-weight: bold;
+	    padding-left: 0.4em;
+	}
+
+    	#main ul.nav a.active {
+	    color: black;
+	    text-decoration: none;	    
+	}
+
+.prose {
+    font-size: 1.1em;
+}
+
+    .prose h2 {
+	font-weight: bold;
+	font-size: 1.1em;
+	margin-bottom: 0.5em;
+    }
+
+    .prose p {
+	margin-bottom: 1em;
+    }
+
+    .prose table.example {
+	width: 90%;
+	margin: 0 auto;
+    }
+
+    	.prose table.table td:first {
+	    font-family: fixed;
+	}
+
+#output, #input {
+    font-family: fixed;
+    border: 0.3em solid black;
+    padding: 0.4em;
+}
+
+    #output {
+	border-bottom: none;
+	height: 100%;
+	overflow: auto;
+    }
+
+    	#output > div {
+	    height: 100%;
+	}
+
+	#output div.entry {
+	    margin-bottom: 0.5em;
+	}
+
+	    #output div.entry:before {
+		content: '> ';
+	    }
+
+    #input {
+	border-top: 1px solid #666;
+	text-align: right
+    }
+
+    	#input > div.panel {
+	    text-align: left;
+	    display: inline-block;
+	    width: 90%;
+	}
+
+    	    #query {
+		font-weight: bold;
+	    }
+
+	    	#query:before {
+		    content: '>';
+		}    
+
+    		#query > input {
+		    width: 95%;
+		    border: none;
+		    outline: none;
+		}
+
+    	#status {
+	    display: inline-block;
+	    width: 9%;
+	}
