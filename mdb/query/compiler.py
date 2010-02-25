@@ -12,11 +12,22 @@ __all__ = ('read', 'evaluate')
 
 ### Compiler
 
-def Evaluator(parse, GLOBAL):
+def Evaluator(parse, BUILTIN):
+    """Create a path query evaluator using a parser and a set of
+    builtin bindings.
+
+    The evaluator evaluates a path expression, producing a callable
+    object.  The callable accepts a tree.Node as its single argument
+    and produces a sequence of values as output.
+
+        evaluate = Evaluator(parse.PathParser(ast), builtin())
+        evaluate('/some/path/expression')(some_node())
+    """
+
     def evaluate(code):
         if isinstance(code, basestring):
             code = compile_ast(parse(code))
-        return eval(code, GLOBAL, {})
+        return eval(code, { '__builtins__': BUILTIN }, {})
     return evaluate
 
 def compile_ast(node, filename='<string>', mode='eval'):
@@ -76,4 +87,4 @@ gensym = Gensym('g')
 
 read = parse.PathParser(ast)
 
-evaluate = Evaluator(read, { '__builtins__' : builtin() })
+evaluate = Evaluator(read, builtin())

@@ -10,7 +10,11 @@
 from __future__ import absolute_import
 from . import datastore as _ds
 
+## Support query_ast.NamedTest
 kind = _ds.kind
 
 def get(*keys):
+    """Abandon the current context; produce a sequence of items
+    associated with the given keys."""
+
     return _ds.get([k for f in keys for k in f])

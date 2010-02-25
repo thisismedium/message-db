@@ -19,12 +19,16 @@ __all__ = (
 ### Abstract Interface
 
 class Node(coll.Hashable):
+    """An abstract interface for leaf nodes."""
+
     __slots__ = ()
 
     def __leaf__(self):
         return True
 
 class InnerNode(Node, coll.Iterable, coll.Sized):
+    """An abstract interface for non-leaf nodes."""
+
     __slots__ = ()
 
     def __leaf__(self):
@@ -39,20 +43,27 @@ class InnerNode(Node, coll.Iterable, coll.Sized):
         """Return an iterator over the following siblings of child."""
 
 def leaf(obj):
+    """Is this object a leaf object?"""
+
     try:
         return obj.__leaf__()
     except AttributeError:
+        ## This is a little weird, but the default value is True
+        ## because being a non-leaf node is opt-in.
         return True
 
 
 ### Dynamic Context
 
+# The original input sequence
 COLLECTION = fluid.cell(())
 collection = fluid.accessor(COLLECTION)
 
+# The currently focused item
 FOCUS = fluid.cell()
 focus = fluid.accessor(FOCUS)
 
+# The index of the currently focused item.
 INDEX = fluid.cell()
 index = fluid.accessor(INDEX)
 
@@ -84,7 +95,18 @@ def focused(expr, items):
 
 ### Tree Traversal
 
+def sequence(obj):
+    """Lift any value into a Sequence that can be used as input to a
+    compiled path query."""
+
+    if isinstance(obj, Sequence):
+        return obj
+    return Sequence(obj)
+
 class Sequence(object):
+    """A sequence wraps a Python object with an interface compatible
+    with path queries."""
+
     __slots__ = ('expr', )
 
     def __init__(self, items):
@@ -119,12 +141,21 @@ class Sequence(object):
     def __nonzero__(self):
         return bool(next(iter(self), False))
 
-def sequence(obj):
-    if isinstance(obj, Sequence):
-        return obj
-    return Sequence(obj)
+def steps(*steps):
+    """Reduce a sequence of steps to a single expression that can be
+    used to expand an input sequence."""
+
+    return reduce(lambda a, s: s(a), reversed(steps), None)
+
+def step(expr, make=None):
+    """Delay the binding of a single step expression to the next step
+    expression."""
+
+    return fn.partial(Step, expr, make=make)
 
 class Step(Sequence):
+    """A path query is a linked list of steps."""
+
     __slots__ = ('next', 'name')
 
     def __init__(self, expr, next, make=None):
@@ -138,22 +169,35 @@ class Step(Sequence):
     def __iter__(self):
         return expand(self.next, self.expr(focus()))
 
-def steps(*steps):
-    return reduce(lambda a, s: s(a), reversed(steps), None)
+def filter(expr):
+    """Lift a Python thunk to a Step."""
 
-def step(expr, make=None):
-    return fn.partial(Step, expr, make=make)
+    return fn.partial(Filter, expr)
 
 class Filter(Step):
+    """A Filter is a way to use a procedure in the middle of a path.
+    The procedure is called with no values and may use the dynamic
+    environment to expand the current item in some way."""
+
     __slots__ = ()
 
     def __iter__(self):
         return expand(self.next, sequence(self.expr()))
 
-def filter(expr):
-    return fn.partial(Filter, expr)
+def predicate(pred):
+    """Lift a nullary Python predicate procedure or an integer
+    (representing an index) to a Step."""
+
+    if isinstance(pred, int):
+        return fn.partial(Predicate, lambda: index() == pred)
+    return fn.partial(Predicate, pred)
 
 class Predicate(Step):
+    """A Predicate is a step that tests the currently focused item.
+    If the test is successful, the item is expanded.  Since the
+    predicate is nullary, it can use the dynamic environment to test
+    the currently focused item."""
+
     __slots__ = ()
 
     def __iter__(self):
@@ -163,11 +207,6 @@ class Predicate(Step):
                     yield x
             else:
                 yield focus()
-
-def predicate(pred):
-    if isinstance(pred, int):
-        return fn.partial(Predicate, lambda: index() == pred)
-    return fn.partial(Predicate, pred)
 
 
 ### Axis

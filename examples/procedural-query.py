@@ -9,7 +9,7 @@ def main(data):
     run(db.init(data, os.path.basename(data)))
 
 def run(root):
-    query = db.query(root).children('news').children('Page')
+    query = db.query(root).find(db.Page).parent()
     for item in query:
         print item
 
