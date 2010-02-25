@@ -10,116 +10,34 @@ from ply import lex, yacc
 __all__ = ('PathParser', 'path')
 
 
-### Lexer
-
-def Lexer():
-    """An XPath lexer; see parse_path() below."""
-
-    tokens = [
-        'MINUS', 'STAR', 'PLUS', 'DSLASH', 'DCOLON', 'DDOT',
-        'STRING', 'INTEGER', 'DECIMAL', 'NAME'
-    ]
-
-    reserved = {
-        'return': 'RETURN',
-        'for': 'FOR',
-        'in': 'IN',
-        'some': 'QUANTITY',
-        'every': 'QUANTITY',
-        'satisfies': 'SATISFIES',
-        'if': 'IF',
-        'then': 'THEN',
-        'else': 'ELSE',
-        'or': 'OR',
-        'and': 'AND',
-        'eq': 'CMP',
-        'ne': 'CMP',
-        'lt': 'CMP',
-        'le': 'CMP',
-        'gt': 'CMP',
-        'ge': 'CMP',
-        'is': 'CMP',
-        'to': 'TO',
-        'div': 'DIV',
-        'mod': 'DIV',
-        'union': 'UNION',
-        'intersect': 'INTERSECT',
-        'except': 'INTERSECT',
-        'child': 'AXIS',
-        'descendant': 'AXIS',
-        'attribute': 'AXIS',
-        'self': 'AXIS',
-        'descendant-or-self': 'AXIS',
-        'following-sibling': 'AXIS',
-        'following': 'AXIS',
-        'namespace': 'AXIS',
-        'parent': 'AXIS',
-        'ancestor': 'AXIS',
-        'preceeding-sibling': 'AXIS',
-        'preceeding': 'AXIS',
-        'ancestor-or-self': 'AXIS'
-    }
-
-    tokens.extend(set(reserved.itervalues()))
-
-    literals = "[](),/.@:?$"
-
-    t_CMP = r'!?=|<[=<]?|>[=>]?'
-    t_PLUS = r'\+'
-    t_MINUS = r'\-'
-    t_STAR = r'\*'
-    t_UNION = r'\|'
-    t_DSLASH = r'//'
-    t_DCOLON = r'::'
-    t_DDOT = r'\.\.'
-
-    def t_INTEGER(t):
-        ur'\d+'
-        t.value = int(t.value)
-        return t
-
-    def t_DECIMAL(t):
-        ur'(?:\d+\.\d*|\.\d+)(?:[eE][\+\-]?\d+)?'
-        t.value = float(t.value)
-        return t
-
-    def t_NAME(t):
-        ur'[a-zA-Z][\w\-]*'
-        t.type = reserved.get(t.value, 'NAME')
-        return t
-
-    def t_STRING(t):
-        ur"""(?:"(?:[^"]|"")*"|'(?:[^']|'')*')"""
-        val = t.value
-        quote = val[0]
-        t.value = val[1:-1].replace(quote * 2, quote)
-        return t
-
-    t_ignore = ' \t\n\r'
-
-    def t_error(t):
-        print 'Illegal character %r at %r' % (t.value[0], t.value[0:15])
-
-    return (tokens, lex.lex())
-
-
 ### Parser
 
 def Parser(tokens, ast):
-    """Make a path parser
+    """Make a path parser.
 
-    The grammar is a looser form of XPath 2.0.  Reading the grammar
-    <http://www.w3.org/TR/xpath20/#nt-bnf> is a good way to understand
-    the overall design.  PLY can't express zero-or-more / one-or-more
-    productions compactly, so many of the one-liners in the XPath
-    grammar are broken across several productions here.
+    The grammar is a generalized form of XPath 2.0.  Reading the XPath
+    grammar <http://www.w3.org/TR/xpath20/#nt-bnf> is a good way to
+    understand the overall design of this grammar.  PLY can't express
+    zero-or-more / one-or-more productions compactly, so many of the
+    one-liners in the XPath grammar are broken across several
+    productions here.
 
     For the most part, productions are declared in the same order
-    they're defined in the XPath grammar.  Notable departures are the
-    use of a PLY precedence table for binary operations, instance-of
-    cast and treat have been dropped, KindTest is generalized, and
-    Predicate is treated as a Step instead of as part of an Axis or
-    Filter.
+    they're defined in the XPath grammar.  Notable departures from the
+    XPath grammar are the use of a PLY precedence table for binary
+    operations, instance-of cast and treat have been dropped, KindTest
+    is generalized, and Predicate is treated as a Step instead of as
+    part of an Axis or Filter.
+
+    For example, this is similar to what the PathParser constructor
+    does:
+
+        from mdb import parse
+
+        (tokens, lexer) = parse.Lexer()
+        path = parse.Parser(tokens, AST)
+        path.parse("//.", lexer=lexer)
+
     """
 
     def p_Path(p):
@@ -220,19 +138,13 @@ def Parser(tokens, ast):
         """ValueExpr : PathExpr"""
         p[0] = p[1]
 
-    def make_path_abbr(proc, axis, test):
+    def make_path_abbr(axis, test):
         ## 'axis::test()'
-        result = ast.Axis(axis, ast.NodeTest(ast.Name(None, test)))
-        if proc:
-            ## 'proc(axis::test())'
-            result = ast.Filter(
-                ast.Apply(ast.Name(None, proc), [ast.PathExpr(result)])
-            )
-        return result
+        return ast.Axis(ast.Name(axis), test)
 
     ## See <http://www.w3.org/TR/xpath20/#doc-xpath-PathExpr>
-    ROOT = make_path_abbr('root', 'self', '*')
-    DESCENDANT = make_path_abbr(None, 'descendant-or-self', '*')
+    ROOT = make_path_abbr('self', ast.ReduceAxis(ast.Name('root'), []))
+    DESCENDANT = make_path_abbr('descendant-or-self', ast.Pattern('*'))
 
     def p_PathExpr_root(p):
         """PathExpr : '/'"""
@@ -273,43 +185,51 @@ def Parser(tokens, ast):
         p[0] = p[1]
 
     def p_AxisStep(p):
-        """AxisStep : AXIS DCOLON NodeTest"""
+        """AxisStep : QName DCOLON NodeReduce"""
         p[0] = ast.Axis(p[1], p[3])
 
+    ## FIXME: leave this out for now; add back after:
+    ##    (a) deciding whether 'self' is right
+    ##    (b) deciding if '/::test()' is just too ugly.
+
+    # def p_AxisStep_reduce(p):
+    #     """AxisStep : DCOLON NodeReduce"""
+    #     p[0] = ast.Axis(ast.Name('self'), p[2])
+
     def p_AxisStep_attr(p):
-        """AxisStep : '@' NodeTest"""
-        p[0] = ast.Axis('attribute', p[2])
+        """AxisStep : '@' NodeReduce"""
+        p[0] = ast.Axis(ast.Name('attribute'), p[2])
 
     def p_AxisStep_parent(p):
         """AxisStep : DDOT"""
-        p[0] = ast.Axis('parent', ast.NodeTest(ast.Name(None, '*')))
+        p[0] = ast.Axis(ast.Name('parent'), ast.Pattern('*'))
 
     def p_AxisStep_child(p):
         """AxisStep : NodeTest"""
-        p[0] = ast.Axis('child', p[1])
+        p[0] = ast.Axis(ast.Name('child'), p[1])
 
-    # def p_NodeTest(p):
-    #     """NodeTest : KindTest
-    #                 | NameTest"""
-    #     p[0] = p[1]
+    def p_NodeReduce(p):
+        """NodeReduce : ReduceAxis
+                      | NodeTest"""
+        p[0] = p[1]
 
     def p_NodeTest(p):
-        """NodeTest : NameTest"""
+        """NodeTest : NameTest
+                    | Wildcard"""
         p[0] = p[1]
 
     def p_NameTest(p):
-        """NameTest : QName
-                    | Wildcard"""
-        p[0] = ast.NodeTest(p[1])
+        """NameTest : QName"""
+        p[0] = ast.NameTest(p[1])
 
     def p_Wildcard(p):
         """Wildcard : STAR"""
-        p[0] = ast.Name(None, '*')
+        p[0] = ast.Pattern(None, '*')
 
     def p_Wildcard_ns(p):
         """Wildcard : STAR ':' NAME
                     | NAME ':' STAR"""
-        p[0] = ast.Name(p[1], p[3])
+        p[0] = ast.Pattern(p[1], p[3])
 
     def p_FilterExpr(p):
         """FilterExpr : PrimaryExpr"""
@@ -368,9 +288,9 @@ def Parser(tokens, ast):
         """Arguments : """
         p[0] = []
 
-    # def p_KindTest(p):
-    #     """KindTest : FunctionCall"""
-    #     p[0] = p[1]
+    def p_ReduceAxis(p):
+        """ReduceAxis : QName '(' Arguments ')'"""
+        p[0] = ast.ReduceAxis(p[1], p[3])
 
     def p_AnyName(p):
         """AnyName : QName
@@ -379,7 +299,7 @@ def Parser(tokens, ast):
 
     def p_QName(p):
         """QName : NAME"""
-        p[0] = ast.Name(None, p[1])
+        p[0] = ast.Name(p[1])
 
     def p_QName_ns(p):
         """QName : NAME ':' NAME"""
@@ -399,9 +319,8 @@ def Parser(tokens, ast):
                        | TO
                        | DIV
                        | UNION
-                       | INTERSECT
-                       | AXIS"""
-        p[0] = ast.Name(None, p[1])
+                       | INTERSECT"""
+        p[0] = ast.Name(p[1])
 
     def p_error(p):
         raise BadToken(p)
@@ -411,6 +330,86 @@ def Parser(tokens, ast):
 def extend(seq, *items):
     seq.extend(items)
     return seq
+
+
+### Lexer
+
+def Lexer():
+    """An XPath lexer; see parse_path() below."""
+
+    tokens = [
+        'MINUS', 'STAR', 'PLUS', 'DSLASH', 'DCOLON', 'DDOT',
+        'STRING', 'INTEGER', 'DECIMAL', 'NAME'
+    ]
+
+    reserved = {
+        'return': 'RETURN',
+        'for': 'FOR',
+        'in': 'IN',
+        'some': 'QUANTITY',
+        'every': 'QUANTITY',
+        'satisfies': 'SATISFIES',
+        'if': 'IF',
+        'then': 'THEN',
+        'else': 'ELSE',
+        'or': 'OR',
+        'and': 'AND',
+        'eq': 'CMP',
+        'ne': 'CMP',
+        'lt': 'CMP',
+        'le': 'CMP',
+        'gt': 'CMP',
+        'ge': 'CMP',
+        'is': 'CMP',
+        'to': 'TO',
+        'div': 'DIV',
+        'mod': 'DIV',
+        'union': 'UNION',
+        'intersect': 'INTERSECT',
+        'except': 'INTERSECT'
+    }
+
+    tokens.extend(set(reserved.itervalues()))
+
+    literals = "[](),/.@:?$"
+
+    t_CMP = r'!?=|<[=<]?|>[=>]?'
+    t_PLUS = r'\+'
+    t_MINUS = r'\-'
+    t_STAR = r'\*'
+    t_UNION = r'\|'
+    t_DSLASH = r'//'
+    t_DCOLON = r'::'
+    t_DDOT = r'\.\.'
+
+    def t_INTEGER(t):
+        ur'\d+'
+        t.value = int(t.value)
+        return t
+
+    def t_DECIMAL(t):
+        ur'(?:\d+\.\d*|\.\d+)(?:[eE][\+\-]?\d+)?'
+        t.value = float(t.value)
+        return t
+
+    def t_NAME(t):
+        ur'[a-zA-Z][\w\-]*'
+        t.type = reserved.get(t.value, 'NAME')
+        return t
+
+    def t_STRING(t):
+        ur"""(?:"(?:[^"]|"")*"|'(?:[^']|'')*')"""
+        val = t.value
+        quote = val[0]
+        t.value = val[1:-1].replace(quote * 2, quote)
+        return t
+
+    t_ignore = ' \t\n\r'
+
+    def t_error(t):
+        print 'Illegal character %r at %r' % (t.value[0], t.value[0:15])
+
+    return (tokens, lex.lex())
 
 
 ### AST
@@ -438,12 +437,14 @@ class AST(object):
     For = node("For")
     If = node("If")
     Name = node("Name")
-    NodeTest = node("NodeTest")
+    NameTest = node("NameTest")
     Number = node("Number")
     Or = node("Or")
     Path = node("Path")
     PathExpr = node("PathExpr")
+    Pattern = node("Pattern")
     Predicate = node("Predicate")
+    ReduceAxis = node("ReduceAxis")
     Quantified = node("Quantified")
     Ref = node("Ref")
     String = node("String")

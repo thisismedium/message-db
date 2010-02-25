@@ -185,23 +185,23 @@ def axis(SeqType):
 
 def standard(expand, test):
     if not test:
-        test = bool
+        test = filtered
     elif isinstance(test, basestring):
         test = named(test)
     elif isinstance(test, type):
         test = instance(test)
     elif not callable(test):
         raise ValueError('Unexpected node test: %r' % test)
-    return lambda item: it.ifilter(test, expand(item))
+    return lambda item: test(expand(item))
 
-def identity(x):
-    return x
+def filtered(items):
+    return it.ifilter(bool, items)
 
 def named(name):
-    return lambda i: i.name == name
+    return lambda items: (i for i in items if i.name == name)
 
 def instance(cls):
-    return lambda i: isinstance(i, cls)
+    return lambda items: (i for i in items if isinstance(i, cls))
 
 @axis(Step)
 def self(item):
@@ -209,7 +209,9 @@ def self(item):
 
 @axis(Step)
 def parent(item):
-    yield item.folder
+    probe = item.folder
+    if probe:
+        yield probe
 
 def child(test):
     if isinstance(test, basestring):

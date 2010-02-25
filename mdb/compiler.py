@@ -30,9 +30,6 @@ def Filter(primary):
         return primary
     return Op('filter', Thunk(primary))
 
-def is_simple(obj):
-    return isinstance(obj, ast.Num)
-
 def Predicate(pred):
     return Op('predicate', pred if isinstance(pred, ast.Num) else Thunk(pred))
 
@@ -40,16 +37,26 @@ def ContextItem():
     return Op('focus')
 
 def Axis(name, test):
-    return Op(name, test)
+    return Op(name.id, test)
 
-def NodeTest(test):
-    test = test.id
-    if test == '*':
-        return ast.Name('None', ast.Load())
-    elif test[0].islower():
-        return ast.Str(test)
+def ReduceAxis(name, args):
+    if not args:
+        return name
+    args.insert(gensym('items'))
+    return Lambda(args, Apply(name, args))
+
+def NameTest(name):
+    name = name.id
+    if name[0].islower():
+        return ast.Str(name)
     else:
-        return Op('kind', ast.Str(test))
+        return Op('kind', ast.Str(name))
+
+def Pattern(*names):
+    name = identifier(names)
+    if name == '*':
+        return ast.Name('None', ast.Load())
+    raise NotImplementedError('The only valid pattern is "*".')
 
 def For(var_in, body):
     gen = [ast.comprehension(Store(n.id), s, []) for (n, s) in var_in]
@@ -76,8 +83,8 @@ def Apply(name, args):
 def Ref(name):
     return name
 
-def Name(ns, lname):
-    return ast.Name('%s:%s' % (ns, lname) if ns else lname, ast.Load())
+def Name(*names):
+    return ast.Name(identifier(names), ast.Load())
 
 def Store(lname):
     return ast.Name(lname, ast.Store())
@@ -87,6 +94,12 @@ def Number(value):
 
 def String(value):
     return ast.Str(value)
+
+def identifier(names):
+    return ':'.join(n for n in names if n)
+
+def is_simple(obj):
+    return isinstance(obj, ast.Num)
 
 ## Operations
 
@@ -135,10 +148,13 @@ def CmpOp(op, left, right):
     return ast.Compare(left, [CMPOP[op]()], [right])
 
 def Op(name, *args):
-    return Apply(Name(None, name), list(args))
+    return Apply(Name(name), list(args))
+
+def Lambda(args, body):
+    return ast.Lambda(ast.arguments(args, None, None, []), body)
 
 def Thunk(expr):
-    return ast.Lambda(ast.arguments([], None, None, []), expr)
+    return Lambda([], expr)
 
 
 ### Compiler
@@ -180,6 +196,19 @@ def exported(mod):
         return mod.__all__
     except AttributeError:
         return (n for n in dir(mod) if not n.startswith('_'))
+
+class Gensym(object):
+    __slots__ = ('prefix', 'index')
+
+    def __init__(self, prefix):
+        self.prefix = prefix
+        self.index = -1
+
+    def __call__(self, name=None):
+        self.index += 1
+        return '%s#%s' % (name or self.prefix, self.index)
+
+gensym = Gensym('g')
 
 
 ### Defaults
