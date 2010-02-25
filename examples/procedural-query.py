@@ -1,17 +1,15 @@
 #!/usr/bin/env python
 
-"""procedural-query.py -- use procedures to query a tree"""
+"""procedural-query.py -- use a procedural API to construct a query."""
 
 import os, sys, mdb
-from mdb import datastore as ds
+from mdb import db
 
 def main(data):
-    run(ds.init(data, os.path.basename(data)))
+    run(db.init(data, os.path.basename(data)))
 
-# from pykk.lib import profile
-# @profile.profiled(restrict=20)
 def run(root):
-    query = mdb.Query(root).children('news').children('Page')
+    query = db.query(root).children('news').children('Page')
     for item in query:
         print item
 

@@ -9,10 +9,14 @@ from md import abc
 from google.appengine.ext import db
 from google.appengine.api import datastore_file_stub
 from google.appengine.api import apiproxy_stub_map
-from . import tree
+from ..query import tree
 
-Key = db.Key
-get = db.get
+__all__ = (
+    'Key', 'Item', 'Folder', 'Page',
+    'root', 'path', 'resolve',
+    'get', 'put', 'kind',
+    'init'
+)
 
 
 ### Models
@@ -140,6 +144,10 @@ def resolve(expr, top=None):
 
 
 ### Utilities
+
+Key = db.Key
+
+get = db.get
 
 SLUG = re.compile(r'[^a-z0-9]+')
 def make_slug(name):

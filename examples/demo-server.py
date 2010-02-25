@@ -8,12 +8,12 @@ is received the query is evaluated against the root of the content
 tree and matching items are returned in a JSON format.
 """
 
-import os, sys, mdb, json, xmpp, base64, collections as coll
+import os, sys, json, xmpp, base64, collections as coll
 from xmpp import xml
-from mdb import datastore as ds
+from mdb import db
 
 def main(data):
-    top = ds.init(data, os.path.basename(data))
+    top = db.init(data, os.path.basename(data))
     server = xmpp.Server({
         'plugins': [(QueryServer, { 'root': top })],
         'users': { 'user': 'secret' },
@@ -32,7 +32,7 @@ class QueryServer(xmpp.Plugin):
         assert iq.get('type') == 'get'
         expr = base64.b64decode(xml.child(iq, '{urn:message}query/text()'))
         try:
-            result = dumps(mdb.query(expr)(self.root))
+            result = dumps(db.query(expr)(self.root))
             self.iq('result', iq, self.E.query({ 'xmlns': 'urn:message'}, result))
         except SyntaxError as exc:
             self.error(iq, 'modify', 'undefined-condition', str(exc))
@@ -45,7 +45,7 @@ def dumps(obj):
     return base64.b64encode(json.dumps(dumps_value(obj)))
 
 def dumps_value(obj):
-    if isinstance(obj, ds.Item):
+    if isinstance(obj, db.Item):
         return dumps_model(obj)
     elif isinstance(obj, (coll.Sequence, coll.Iterator)):
         return map(dumps_value, obj)
@@ -59,9 +59,9 @@ def dumps_model(obj):
     )
 
 def dumps_property(value):
-    if isinstance(value, ds.Item):
+    if isinstance(value, db.Item):
         value = value.key()
-    if isinstance(value, ds.Key):
+    if isinstance(value, db.Key):
         return str(value)
     elif isinstance(value, list):
         return map(dumps_property, value)

@@ -6,7 +6,7 @@ Example: parse-path.py 'child::para[position()>1]'
 """
 
 import sys, optparse
-from mdb import parse
+from mdb.query import parse
 
 def usage():
     print __doc__

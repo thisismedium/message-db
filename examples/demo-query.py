@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""demo-server.py -- run path queries against a demo content tree
+"""demo-query.py -- run path queries against a demo content tree
 
 The is like demo-server/demo-client, but is not client-server.  It
 builts a content tree from the YAML in "demo" and evaluates a path
@@ -10,7 +10,7 @@ query against the root of the tree.
 """
 
 import os, sys, mdb
-from mdb import datastore as ds
+from mdb import db
 
 def usage():
     print __doc__
@@ -18,8 +18,8 @@ def usage():
     sys.exit(1)
 
 def main(data, expr):
-    top = ds.init(data, os.path.basename(data))
-    query = mdb.query(expr)
+    top = db.init(data, os.path.basename(data))
+    query = db.query(expr)
     print 'Result of %r:' % expr
     result = query(top)
     if isinstance(result, tuple):

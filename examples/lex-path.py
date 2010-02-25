@@ -6,7 +6,7 @@ Example: lex-path.py 'child::para[position()>1]'
 """
 
 import sys
-from mdb import parse
+from mdb.query import parse
 
 def usage():
     print __doc__
@@ -14,7 +14,7 @@ def usage():
     sys.exit(1)
 
 def main(path):
-    (_, lex) = parse.lex_path()
+    (_, lex) = parse.Lexer()
     lex.input(path)
     while True:
         tok = lex.token()

@@ -9,7 +9,7 @@ from md import abc, fluid
 
 __all__ = (
     'Node', 'InnerNode', 'leaf', 'collection', 'focus', 'index',
-    'XPath', 'Sequence', 'sequence', 'path', 'filter', 'predicate',
+    'Path', 'Sequence', 'sequence', 'steps', 'filter', 'predicate',
     'self', 'parent', 'child', 'attribute', 'ancestor', 'ancestor_or_self',
     'descendant', 'descendant_or_self', 'following_sibling', 'following',
     'preceeding_sibling', 'preceeding'
@@ -59,7 +59,7 @@ index = fluid.accessor(INDEX)
 
 ### Top Level
 
-def XPath(exprs):
+def Path(exprs):
     if isinstance(exprs, Sequence):
         def xpath(items):
             items = sequence(items)
@@ -138,7 +138,7 @@ class Step(Sequence):
     def __iter__(self):
         return expand(self.next, self.expr(focus()))
 
-def path(*steps):
+def steps(*steps):
     return reduce(lambda a, s: s(a), reversed(steps), None)
 
 def step(expr, make=None):
@@ -326,10 +326,8 @@ def unique(seq):
 
 def hashable(seq):
     for item in seq:
-        if isinstance(item, list):
+        if isinstance(item, (list, set)):
             item = tuple(item)
-        elif isinstance(item, set):
-            item = frozenset(item)
         yield item
 
 

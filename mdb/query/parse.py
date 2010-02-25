@@ -17,17 +17,14 @@ def Parser(tokens, ast):
 
     The grammar is a generalized form of XPath 2.0.  Reading the XPath
     grammar <http://www.w3.org/TR/xpath20/#nt-bnf> is a good way to
-    understand the overall design of this grammar.  PLY can't express
-    zero-or-more / one-or-more productions compactly, so many of the
-    one-liners in the XPath grammar are broken across several
-    productions here.
+    understand the overall design of this grammar.
 
     For the most part, productions are declared in the same order
-    they're defined in the XPath grammar.  Notable departures from the
-    XPath grammar are the use of a PLY precedence table for binary
-    operations, instance-of cast and treat have been dropped, KindTest
-    is generalized, and Predicate is treated as a Step instead of as
-    part of an Axis or Filter.
+    they're defined in the XPath grammar.  Departures from the XPath
+    grammar are the use of a PLY precedence table for binary
+    operations, instance-of/cast/treat have been dropped, KindTest is
+    generalized, and Predicate is treated as a Step instead of as part
+    of an Axis or Filter.
 
     For example, this is similar to what the PathParser constructor
     does:
@@ -138,13 +135,9 @@ def Parser(tokens, ast):
         """ValueExpr : PathExpr"""
         p[0] = p[1]
 
-    def make_path_abbr(axis, test):
-        ## 'axis::test()'
-        return ast.Axis(ast.Name(axis), test)
-
     ## See <http://www.w3.org/TR/xpath20/#doc-xpath-PathExpr>
-    ROOT = make_path_abbr('self', ast.ReduceAxis(ast.Name('root'), []))
-    DESCENDANT = make_path_abbr('descendant-or-self', ast.Pattern('*'))
+    ROOT = ast.Axis(ast.Name('self'), ast.ReduceAxis(ast.Name('root'), []))
+    DESCENDANT = ast.Axis(ast.Name('descendant-or-self'), ast.Pattern('*'))
 
     def p_PathExpr_root(p):
         """PathExpr : '/'"""
@@ -335,7 +328,7 @@ def extend(seq, *items):
 ### Lexer
 
 def Lexer():
-    """An XPath lexer; see parse_path() below."""
+    """A Path lexer."""
 
     tokens = [
         'MINUS', 'STAR', 'PLUS', 'DSLASH', 'DCOLON', 'DDOT',
@@ -415,6 +408,8 @@ def Lexer():
 ### AST
 
 class AST(object):
+    """This is an "identity" AST for the Path parser.  It simply
+    captures the structure of the parsed expression."""
 
     def __init__(self, tag, *elements):
         self.tag = tag
@@ -461,6 +456,7 @@ class BadToken(Exception):
 
 def parse(parser, lexer, data, debug=False):
     """Wrap parser.parse to produce a decent error message."""
+
     try:
         return parser.parse(data, lexer=lexer, debug=debug)
     except BadToken as exc:
@@ -479,8 +475,10 @@ def parse(parser, lexer, data, debug=False):
         ))
 
 def PathParser(ast=AST, **kwargs):
+    """Create a path parser using the given AST."""
+
     (tokens, lexer) = Lexer()
     parser = Parser(tokens, ast)
     return functools.partial(parse, parser, lexer, **kwargs)
 
-path = PathParser()
+path = PathParser() # default parser

@@ -8,16 +8,10 @@
 ## entirely into the global path evaluation context.
 
 from __future__ import absolute_import
-from . import datastore as _ds, tree as _tree
+from . import tree as _tree
 
 some = any
-
 every = all
-
-kind = _ds.kind
-
-def get(*keys):
-    return _ds.get([k for f in keys for k in f])
 
 def root(seq):
     seq = list(seq)
@@ -35,15 +29,3 @@ def unique(seq):
         if item not in seen:
             seen.add(item)
             yield item
-
-def numeric_divide(a, b):
-    return float(a) / float(b)
-
-def numeric_integer_divide(a, b):
-    return int(a / b)
-
-def to(a, b):
-    """XPath ranges are inclusive.  Bump the end point because
-    Python's are exclusive."""
-
-    return xrange(int(a), int(b) + 1)

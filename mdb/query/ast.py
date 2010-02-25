@@ -1,19 +1,20 @@
 ## Copyright (c) 2010, Coptix, Inc.  All rights reserved.
 ## See the LICENSE file for license terms and warranty disclaimer.
 
-"""compiler -- compile path queries"""
+"""ast -- path query abstract syntax tree"""
 
 from __future__ import absolute_import
-import sys, ast, __builtin__
-from . import parse, ops, tree, datastore
+import ast
 
-__all__ = ('read', 'evaluate')
-
-
-### AST
+__all__ = (
+    'Path', 'Expr', 'PathExpr', 'Filter', 'Predicate', 'ContextItem', 'Axis',
+    'ReduceAxis', 'NameTest', 'Pattern', 'For', 'VarIn', 'Quantified', 'If',
+    'Apply', 'Ref', 'Name', 'Store', 'Number', 'String', 'And', 'Or',
+    'UnaryOp', 'BinOp', 'CmpOp'
+)
 
 def Path(expr):
-    return ast.Expression(Op('XPath', expr))
+    return ast.Expression(Op('Path', expr))
 
 def Expr(*expr):
     if len(expr) == 1:
@@ -23,7 +24,7 @@ def Expr(*expr):
 def PathExpr(*steps):
     if len(steps) == 1 and is_simple(steps[0]):
         return steps[0]
-    return Op('path', *steps)
+    return Op('steps', *steps)
 
 def Filter(primary):
     if is_simple(primary):
@@ -46,11 +47,7 @@ def ReduceAxis(name, args):
     return Lambda(args, Apply(name, args))
 
 def NameTest(name):
-    name = name.id
-    if name[0].islower():
-        return ast.Str(name)
-    else:
-        return Op('kind', ast.Str(name))
+    return ast.Str(name.id)
 
 def Pattern(*names):
     name = identifier(names)
@@ -94,12 +91,6 @@ def Number(value):
 
 def String(value):
     return ast.Str(value)
-
-def identifier(names):
-    return ':'.join(n for n in names if n)
-
-def is_simple(obj):
-    return isinstance(obj, ast.Num)
 
 ## Operations
 
@@ -147,6 +138,15 @@ CMPOP = {
 def CmpOp(op, left, right):
     return ast.Compare(left, [CMPOP[op]()], [right])
 
+
+### Shortcuts
+
+def identifier(names):
+    return ':'.join(n for n in names if n)
+
+def is_simple(obj):
+    return isinstance(obj, ast.Num)
+
 def Op(name, *args):
     return Apply(Name(name), list(args))
 
@@ -155,70 +155,3 @@ def Lambda(args, body):
 
 def Thunk(expr):
     return Lambda([], expr)
-
-
-### Compiler
-
-def evaluator(parse, GLOBAL):
-    def evaluate(code):
-        if isinstance(code, basestring):
-            code = compile_ast(parse(code))
-        return eval(code, GLOBAL, {})
-    return evaluate
-
-def compile_ast(node, filename='<string>', mode='eval'):
-    ## print ast.dump(ast.fix_missing_locations(node))
-    return compile(ast.fix_missing_locations(node), filename, mode)
-
-
-### Environment
-
-def environment(*modules):
-    result = {}
-    for (env, names) in modules:
-        for name in names:
-            bind(result, name, env[name])
-    return result
-
-def bind(env, name, value):
-    env[binding_name(name)] = value
-
-def binding_name(name):
-    ## The XPath convention is to hyphenate identifiers.  Translate
-    ## from Python identifier conventions.
-    return name.replace('_', '-')
-
-def use(mod, *only):
-    return (mod.__dict__, only or exported(mod))
-
-def exported(mod):
-    try:
-        return mod.__all__
-    except AttributeError:
-        return (n for n in dir(mod) if not n.startswith('_'))
-
-class Gensym(object):
-    __slots__ = ('prefix', 'index')
-
-    def __init__(self, prefix):
-        self.prefix = prefix
-        self.index = -1
-
-    def __call__(self, name=None):
-        self.index += 1
-        return '%s#%s' % (name or self.prefix, self.index)
-
-gensym = Gensym('g')
-
-
-### Defaults
-
-read = parse.PathParser(sys.modules[__name__])
-
-evaluate = evaluator(read, {
-    '__builtins__' : environment(
-        use(__builtin__, 'list', 'int', 'float'),
-        use(ops),
-        use(tree),
-    )
-})
