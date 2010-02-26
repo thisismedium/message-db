@@ -4,9 +4,8 @@
 """dav -- wsgidav integration"""
 
 from __future__ import absolute_import
-import httplib
 from wsgidav import wsgidav_app
-from . import wsgi
+from tornado import wsgi
 
 __all__ = ('DAVHandler', 'App', 'Filesystem')
 
