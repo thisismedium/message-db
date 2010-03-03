@@ -15,6 +15,10 @@ DEFAULT_CACHE_SIZE = 1000
 
 @abc.implements(Prefixed)
 class static(object):
+    """Static storage is content-addressed.  When objects are put into
+    the store, they are serialized.  The serialized value is hashed;
+    this hash is the address of the object.  This means that the
+    objects must be immutable and load/dump must be idempotent."""
 
     CacheType = dict
 

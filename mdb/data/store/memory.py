@@ -10,6 +10,7 @@ from ..prelude import *
 __all__ = ('memory', )
 
 class memory(object):
+    """A "backing store" that keeps data in memory."""
 
     DataType = dict
     CasType = dict

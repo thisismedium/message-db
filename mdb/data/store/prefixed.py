@@ -12,6 +12,9 @@ __all__ = ('prefixed', )
 
 @abc.implements(Prefixed)
 class prefixed(object):
+    """A "backing store" that manages adding a prefix to any keys
+    keys.  This can be used to logically partition the keyspace of a
+    real backing store."""
 
     def __init__(self, back, prefix):
         if isinstance(back, Prefixed):
