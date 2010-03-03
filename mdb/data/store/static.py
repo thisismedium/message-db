@@ -79,6 +79,13 @@ class static(object):
 
     def _load(self, address, value):
         if value is not Undefined:
+            if __debug__:
+                probe = self._digest(value)
+                if probe != address:
+                    raise BadObject(
+                        "Inconsistent static identity %r, expected %r." % (
+                            probe, address
+                    ))
             value = self._marshall.load(value)
         return self._cached(address, value)
 
