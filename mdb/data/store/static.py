@@ -86,7 +86,7 @@ class static(object):
                         "Inconsistent static identity %r, expected %r." % (
                             probe, address
                     ))
-            value = self._marshall.load(value)
+            value = self._marshall.loads(value)
         return self._cached(address, value)
 
     def _cached(self, address, value):
