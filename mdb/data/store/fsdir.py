@@ -87,6 +87,8 @@ class fsdir(object):
         path = self._key_path(key)
         os.mkdir(os.dirname(path))
         os.dump(path, self._gzwrite, value)
+        if key in self._cas:
+            self._cas[key] += random.getrandbits(16)
 
     def _make_cas_token(self, key, value):
         if value is Undefined:
@@ -100,9 +102,7 @@ class fsdir(object):
 
     def _valid_cas_token(self, key, token):
         try:
-            if token == self._cas[key]:
-                self._cas[key] += random.getrandbits(16)
-                return True
+            return token == self._cas[key]
         except KeyError:
             return False
 
