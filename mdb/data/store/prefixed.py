@@ -10,14 +10,13 @@ from ..prelude import *
 
 __all__ = ('prefixed', )
 
-@abc.implements(Prefixed)
+@abc.implements(Logical)
 class prefixed(object):
-    """A "backing store" that manages adding a prefix to any keys
-    keys.  This can be used to logically partition the keyspace of a
-    real backing store."""
+    """A "backing store" that adds a prefix to any keys.  This can be
+    used to logically partition the keyspace of a real backing store."""
 
     def __init__(self, back, prefix):
-        if isinstance(back, Prefixed):
+        if isinstance(back, Logical):
             prefix = back._prefix + prefix
             back = back._back
         self._back = back

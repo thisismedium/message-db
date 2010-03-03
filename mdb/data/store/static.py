@@ -1,7 +1,7 @@
 ## Copyright (c) 2010, Coptix, Inc.  All rights reserved.
 ## See the LICENSE file for license terms and warranty disclaimer.
 
-"""static -- write-only, statically addressed backing store"""
+"""static -- write-once, statically addressed backing store"""
 
 from __future__ import absolute_import
 from hashlib import sha1
@@ -13,7 +13,7 @@ __all__ = ('static', )
 
 DEFAULT_CACHE_SIZE = 1000
 
-@abc.implements(Prefixed)
+@abc.implements(Logical)
 class static(object):
     """Static storage is content-addressed.  When objects are put into
     the store, they are serialized.  The serialized value is hashed;
@@ -23,7 +23,7 @@ class static(object):
     CacheType = dict
 
     def __init__(self, back, marshall, prefix='', cache=DEFAULT_CACHE_SIZE):
-        if isinstance(back, Prefixed):
+        if isinstance(back, Logical):
             prefix = back._prefix + prefix
             back = back._back
         self._back = back

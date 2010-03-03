@@ -6,7 +6,7 @@
 from __future__ import absolute_import
 from md import abc
 
-__all__ = ('StoreError', 'NotStored', 'NotFound', 'Prefixed')
+__all__ = ('StoreError', 'NotStored', 'NotFound', 'Logical')
 
 class StoreError(Exception):
     """A generic catch-all for storage errors."""
@@ -18,7 +18,7 @@ class NotFound(StoreError):
 class NotStored(StoreError):
     """Raised when an item cannot be stored."""
 
-class Prefixed(object):
+class Logical(object):
     __metaclass__ = abc.ABCMeta
 
     @property
