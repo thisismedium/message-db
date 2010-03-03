@@ -46,7 +46,7 @@ class fsdir(object):
     def get(self, key):
         return self._get(key)
 
-    def mget(self, *keys):
+    def mget(self, keys):
         return ((k, self._get(k)) for k in keys)
 
     def gets(self, key):

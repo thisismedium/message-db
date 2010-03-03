@@ -5,16 +5,23 @@
 
 from __future__ import absolute_import
 from hashlib import sha1
+from md import abc
 from .interface import *
 from ..prelude import *
 
+__all__ = ('static', )
+
 DEFAULT_CACHE_SIZE = 1000
 
+@abc.implements(Prefixed)
 class static(object):
 
     CacheType = dict
 
     def __init__(self, back, marshall, prefix='', cache=DEFAULT_CACHE_SIZE):
+        if isinstance(back, Prefixed):
+            prefix = back._prefix + prefix
+            back = back._back
         self._back = back
         self._marshall = marshall
         self._cache = None
@@ -47,7 +54,7 @@ class static(object):
         except KeyError:
             return self._load(address, self._back.get(self._key(address)))
 
-    def mget(self, *addresses):
+    def mget(self, addresses):
         need = {}
         for address in addresses:
             try:

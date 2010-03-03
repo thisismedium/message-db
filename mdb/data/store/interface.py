@@ -4,8 +4,9 @@
 """interfaces -- storage interfaces"""
 
 from __future__ import absolute_import
+from md import abc
 
-__all__ = ('StoreError', 'NotStored')
+__all__ = ('StoreError', 'NotStored', 'NotFound', 'Prefixed')
 
 class StoreError(Exception):
     """A generic catch-all for storage errors."""
@@ -16,3 +17,14 @@ class NotFound(StoreError):
 
 class NotStored(StoreError):
     """Raised when an item cannot be stored."""
+
+class Prefixed(object):
+    __metaclass__ = abc.ABCMeta
+
+    @property
+    def _prefix(self):
+        """A string prefix applied to all keys."""
+
+    @property
+    def _back(self):
+        """The real backing store."""
