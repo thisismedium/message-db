@@ -8,7 +8,10 @@ import yaml
 from .prelude import *
 from . import collections as coll
 
-__all__ = ('load', 'loads', 'dump', 'dumps', 'pretty')
+__all__ = (
+    'load', 'loads', 'dump', 'dumps',
+    'pretty', 'represent', 'construct'
+)
 
 
 ### Public interface
@@ -30,7 +33,9 @@ def loads(data):
     tree([('baz', 'gorp'), ('foo', 'bar'), ('mumble', 'quux')])
 
     >>> loads('''!!omap [{c: 1}, {b: 2}, {m: 3}]\\n''')
+    omap([('c', 1), ('b', 2), ('m', 3)])
     """
+
     return yaml.load(data, Loader)
 
 def dump(data, stream):
@@ -44,6 +49,7 @@ def dumps(data):
     >>> dumps(coll.tree(c=1, b=2, m=3))
     '{b: 2, c: 1, m: 3}\\n'
     >>> dumps(coll.omap([('c', 1), ('b', 2), ('m', 3)]))
+    '!!omap [{c: 1}, {b: 2}, {m: 3}]\\n'
     """
 
     return dump(data, None)
@@ -55,14 +61,63 @@ def pretty(data, stream=None):
     >>> pretty(coll.tree(c=1, b=2, m=3))
     'b: 2\\nc: 1\\nm: 3\\n'
     >>> pretty(coll.omap([('c', 1), ('b', 2), ('m', 3)]))
+    '!!omap\\n- c: 1\\n- b: 2\\n- m: 3\\n'
     """
     return yaml.dump(data, stream, Dumper, default_flow_style=False)
+
+def represent(tag, cls):
+    """Declare a method for representing a type.
+
+    >>> foo = namedtuple('foo', 'a b')
+    >>> @represent('foo', foo)
+    ... def repr_foo(value):
+    ...     return value._asdict()
+    >>> dumps(foo(a=1, b=2))
+    '!!m/foo {a: 1, b: 2}\\n'
+    """
+    tag = yaml_tag(tag)
+    def decorator(proc):
+        @wraps(proc)
+        def internal(dump, value):
+            return repr_tagged(dump, tag, proc(value))
+        return add_representer(cls, internal)
+    return decorator
+
+def construct(tag):
+    """Declare a method for constructing a type from a tag.
+
+    >>> foo = namedtuple('foo', 'a b')
+    >>> @construct('foo')
+    ... def make_foo(value):
+    ...     return foo(**value)
+    >>> loads('!!m/foo {a: 1, b: 2}\\n')
+    foo(a=1, b=2)
+    """
+
+    def decorator(proc):
+        @wraps(proc)
+        def internal(load, node):
+            return make_node(load, proc, node)
+        return add_constructor(yaml_tag(tag), internal)
+    return decorator
 
 
 ### Construct
 
-def add_constructor(cls, construct):
-    Constructor.add_constructor(cls, construct)
+def add_constructor(tag, construct):
+    Constructor.add_constructor(tag, construct)
+    return construct
+
+def yaml_tag(tag):
+    return u'tag:yaml.org,2002:m/%s' % tag
+
+def make_node(load, proc, node):
+    if isinstance(node, yaml.MappingNode):
+        return proc(load.construct_mapping(node))
+    elif isinstance(node, yaml.SequenceNode):
+        return proc(load.construct_sequence(node))
+    else:
+        return proc(load.construct_scalar(node))
 
 class Constructor(yaml.constructor.SafeConstructor):
     """Override the default behavior of SafeConstructor to make maps
@@ -141,6 +196,7 @@ else:
 
 def add_representer(cls, represent):
     Representer.add_representer(cls, represent)
+    return represent
 
 Representer = yaml.representer.SafeRepresenter
 
@@ -173,6 +229,15 @@ def repr_pairs(dump, tag, sequence, flow_style=None):
         else:
             node.flow_style = best_style
     return node
+
+def repr_tagged(dumper, tag, value):
+    if isinstance(value, Mapping):
+        return dumper.represent_mapping(tag, value)
+    elif isinstance(value, (Sequence, Iterator)):
+        return dumper.represent_sequence(tag, value)
+    else:
+        return dumper.represent_scalar(tag, value)
+
 
 
 ### Dump
