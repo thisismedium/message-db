@@ -55,23 +55,23 @@ class TestFSDir(TestBackingStore, unittest.TestCase):
 
     def makeStore(self):
         from .. import os
-        return back('fsdir', os.mkdtemp())
+        return back.fsdir(os.mkdtemp())
 
 class TestPrefixed(TestBackingStore, unittest.TestCase):
 
     def makeStore(self):
-        return back('prefixed', back('memory'), '#')
+        return back.prefixed(back.memory(), '#')
 
 class TestMemory(TestBackingStore, unittest.TestCase):
 
     def makeStore(self):
-        return back('memory')
+        return back.memory()
 
 class TestStatic(unittest.TestCase):
 
     def setUp(self):
         from .. import yaml
-        self.back = back('static', back('memory'), yaml, prefix='#')
+        self.back = back.static(back.memory(), yaml, prefix='#')
         self.back.open()
 
     def tearDown(self):
