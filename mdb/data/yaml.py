@@ -167,36 +167,19 @@ add_constructor(u'tag:yaml.org,2002:omap', Constructor.construct_yaml_omap)
 add_constructor(u'tag:yaml.org,2002:map', Constructor.construct_yaml_map)
 
 
-### Load
-
-if yaml.__with_libyaml__:
-    from yaml import CParser
-
-    class Loader(CParser, Constructor, yaml.resolver.Resolver):
-
-        def __init__(self, stream):
-            CParser.__init__(self, stream)
-            Constructor.__init__(self)
-            yaml.resolver.Resolver.__init__(self)
-
-else:
-    class Loader(yaml.reader.Reader, yaml.scanner.Scanner, yaml.parser.Parser,
-                 yaml.composer.Composer, Constructor, yaml.resolver.Resolver):
-
-        def __init__(self, stream):
-            yaml.reader.Reader.__init__(self, stream)
-            yaml.scanner.Scanner.__init__(self)
-            yaml.parser.Parser.__init__(self)
-            yaml.composer.Composer.__init__(self)
-            Constructor.__init__(self)
-            yaml.resolver.Resolver.__init__(self)
-
-
 ### Represent
 
 def add_representer(cls, represent):
     Representer.add_representer(cls, represent)
     return represent
+
+def repr_tagged(dumper, tag, value):
+    if isinstance(value, Mapping):
+        return dumper.represent_mapping(tag, value)
+    elif isinstance(value, (Sequence, Iterator)):
+        return dumper.represent_sequence(tag, value)
+    else:
+        return dumper.represent_scalar(tag, value)
 
 Representer = yaml.representer.SafeRepresenter
 
@@ -230,17 +213,33 @@ def repr_pairs(dump, tag, sequence, flow_style=None):
             node.flow_style = best_style
     return node
 
-def repr_tagged(dumper, tag, value):
-    if isinstance(value, Mapping):
-        return dumper.represent_mapping(tag, value)
-    elif isinstance(value, (Sequence, Iterator)):
-        return dumper.represent_sequence(tag, value)
-    else:
-        return dumper.represent_scalar(tag, value)
-
-
 
 ### Dump
 
 Dumper = yaml.SafeDumper
+
+
+### Load
+
+if yaml.__with_libyaml__:
+    from yaml import CParser
+
+    class Loader(CParser, Constructor, yaml.resolver.Resolver):
+
+        def __init__(self, stream):
+            CParser.__init__(self, stream)
+            Constructor.__init__(self)
+            yaml.resolver.Resolver.__init__(self)
+
+else:
+    class Loader(yaml.reader.Reader, yaml.scanner.Scanner, yaml.parser.Parser,
+                 yaml.composer.Composer, Constructor, yaml.resolver.Resolver):
+
+        def __init__(self, stream):
+            yaml.reader.Reader.__init__(self, stream)
+            yaml.scanner.Scanner.__init__(self)
+            yaml.parser.Parser.__init__(self)
+            yaml.composer.Composer.__init__(self)
+            Constructor.__init__(self)
+            yaml.resolver.Resolver.__init__(self)
 
