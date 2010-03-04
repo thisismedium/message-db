@@ -65,17 +65,54 @@ class fsdir(object):
                 raise NotStored(key)
             self._set(key, value)
 
+    def madd(self, pairs):
+        errors = set()
+        with self._lock:
+            for (key, value) in pairs:
+                if self._exists(key):
+                    errors.add(key)
+                    continue
+                self._set(key, value)
+        if errors:
+            raise NotStored(errors)
+
     def replace(self, key, value):
         with self._lock:
             if not self._exists(key):
                 raise NotStored(key)
             self._set(key, value)
 
+    def mreplace(self, pairs):
+        errors = set()
+        with self._lock:
+            for (key, value) in pairs:
+                if not self._exists(key):
+                    errors.add(key)
+                    continue
+            self._set(key, value)
+        if errors:
+            raise NotStored(errors)
+
     def cas(self, key, value, token):
         with self._lock:
             if not self._valid_cas_token(key, token):
                 raise NotStored(key)
             self._set(key, value)
+
+    def delete(self, key):
+        with self._lock:
+            if not self._delete(key):
+                raise NotFound(key)
+
+
+    def mdelete(self, keys):
+        errors = set()
+        with self._lock(key):
+            for key in keys:
+                if self._delete(key):
+                    errors.add(key)
+        if errors:
+            raise NotFound(errors)
 
     def _exists(self, key):
         return os.exists(self._key_path(key))
@@ -89,6 +126,9 @@ class fsdir(object):
         os.dump(path, self._gzwrite, value)
         if key in self._cas:
             self._cas[key] += random.getrandbits(16)
+
+    def _delete(self, key):
+        return os.delete(self._key_path(key))
 
     def _make_cas_token(self, key, value):
         if value is Undefined:

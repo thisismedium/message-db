@@ -34,7 +34,7 @@ class static(object):
 
     def __repr__(self):
         name = getattr(self._marshall, '__name__', None) or repr(self._marshall)
-        return '%s(%r, %s)' % (type(self.__name__), self._back, name)
+        return '%s(%r, %s)' % (type(self).__name__, self._back, name)
 
     def open(self):
         if self._cache is None:
@@ -62,21 +62,24 @@ class static(object):
         need = {}
         for address in addresses:
             try:
-                yield self._cache[address]
+                yield (address, self._cache[address])
             except KeyError:
                 need[self._key(address)] = address
-        for (key, data) in self._back.mget(*need.keys()):
+        for (key, data) in self._back.mget(need):
             address = need[key]
             yield (address, self._load(address, data))
 
     def add(self, address, value):
         self._store(address, value)
 
+    def madd(self, pairs):
+        self._mstore(pairs)
+
     def put(self, value):
         return self._store(None, value)
 
     def mput(self, values):
-        return (self._store(None, v) for v in values)
+        return self._mstore((None, v) for v in values)
 
     def _key(self, address):
         return self._prefix + address
@@ -107,6 +110,14 @@ class static(object):
             ## supress any errors.
             pass
         return (address, self._cached(address, value))
+
+    def _mstore(self, pairs):
+        data = [(v, self._dump(a, v)) for (a, v) in pairs]
+        try:
+            self._back.madd((self._key(a), d) for (_, (a, d)) in data)
+        except NotStored:
+            pass
+        return ((a, v) for (v, (a, _)) in data)
 
     def _dump(self, address, value):
         data = self._marshall.dumps(value)

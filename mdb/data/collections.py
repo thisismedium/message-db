@@ -6,7 +6,7 @@
 from __future__ import absolute_import
 import copy, bisect, collections as coll, itertools as it
 from md import abc
-from .prelude import *
+from ._prelude import *
 
 __all__ = (
     'Tree', 'MutableTree', 'tree',
@@ -184,7 +184,7 @@ class tree(dict):
         self.update(items)
 
 
-### OrderedDict
+### OrderedMap
 
 try:
     OrderedDict = coll.OrderedDict

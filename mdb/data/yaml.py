@@ -65,7 +65,7 @@ def pretty(data, stream=None):
     """
     return yaml.dump(data, stream, Dumper, default_flow_style=False)
 
-def represent(tag, cls):
+def represent(tag, cls, ns=None):
     """Declare a method for representing a type.
 
     >>> foo = namedtuple('foo', 'a b')
@@ -75,7 +75,7 @@ def represent(tag, cls):
     >>> dumps(foo(a=1, b=2))
     '!!m/foo {a: 1, b: 2}\\n'
     """
-    tag = yaml_tag(tag)
+    tag = yaml_tag(tag, ns)
     def decorator(proc):
         @wraps(proc)
         def internal(dump, value):
@@ -83,7 +83,7 @@ def represent(tag, cls):
         return add_representer(cls, internal)
     return decorator
 
-def construct(tag):
+def construct(tag, ns=None):
     """Declare a method for constructing a type from a tag.
 
     >>> foo = namedtuple('foo', 'a b')
@@ -98,7 +98,7 @@ def construct(tag):
         @wraps(proc)
         def internal(load, node):
             return make_node(load, proc, node)
-        return add_constructor(yaml_tag(tag), internal)
+        return add_constructor(yaml_tag(tag, ns), internal)
     return decorator
 
 
@@ -108,8 +108,8 @@ def add_constructor(tag, construct):
     Constructor.add_constructor(tag, construct)
     return construct
 
-def yaml_tag(tag):
-    return u'tag:yaml.org,2002:m/%s' % tag
+def yaml_tag(tag, ns='m/'):
+    return u'tag:yaml.org,2002:%s%s' % (ns, tag)
 
 def make_node(load, proc, node):
     if isinstance(node, yaml.MappingNode):
@@ -176,7 +176,8 @@ def add_representer(cls, represent):
 def repr_tagged(dumper, tag, value):
     if isinstance(value, Mapping):
         return dumper.represent_mapping(tag, value)
-    elif isinstance(value, (Sequence, Iterator)):
+    elif (isinstance(value, (Sequence, Iterator))
+          and not isinstance(value, basestring)):
         return dumper.represent_sequence(tag, value)
     else:
         return dumper.represent_scalar(tag, value)

@@ -6,6 +6,7 @@
 from __future__ import absolute_import
 import unittest
 from . import *
+from ..prelude import *
 
 class TestBackingStore(object):
 
@@ -50,6 +51,11 @@ class TestBackingStore(object):
         self.assertEqual(value, '3')
         self.assertNotEqual(t1, t2)
         self.assertRaises(NotStored, lambda: self.back.cas('a', '4', t1))
+
+    def test_delete(self):
+        self.back.delete('a')
+        self.assertEqual(self.back.get('a'), Undefined)
+        self.assertRaises(NotFound, lambda: self.back.delete('c'))
 
 class TestFSDir(TestBackingStore, unittest.TestCase):
 

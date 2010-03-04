@@ -56,11 +56,23 @@ class prefixed(object):
     def add(self, key, value):
         self._back.add(self._key(key), value)
 
+    def madd(self, pairs):
+        self._back.madd((self._key(k), v) for (k, v) in pairs)
+
     def replace(self, key, value):
         self._back.replace(self._key(key), value)
 
+    def mreplace(self, pairs):
+        self._back.mreplace((self._key(k), v) for (k, v) in pairs)
+
     def cas(self, key, value, token):
         self._back.cas(self._key(key), value, token)
+
+    def delete(self, key):
+        return self._back.delete(self._key(key))
+
+    def mdelete(self, keys):
+        return self._back.mdelete(self._key(k) for k in keys)
 
     def _key(self, key):
         return self._prefix + key

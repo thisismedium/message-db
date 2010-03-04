@@ -7,10 +7,11 @@ from __future__ import absolute_import
 import os, errno, contextlib as ctx, tempfile
 
 __all__ = (
+    'errno',
     'exists', 'join', 'dirname', 'basename',
     'mkstemp', 'mkdtemp', 'unlink',
     'makedirs', 'mkdir',
-    'contents', 'load', 'atomic', 'put', 'dump'
+    'contents', 'load', 'atomic', 'put', 'dump', 'delete'
 )
 
 
@@ -96,3 +97,15 @@ def dump(path, dump, data):
 
     with atomic(path) as port:
         dump(data, port)
+
+def delete(path):
+    """An unlink that suppresses errors about path not existing.
+    Return True if the file was unlinked; False if it didn't exist."""
+
+    try:
+        unlink(path)
+        return True
+    except OSError as exc:
+        if exc.errno != errno.ENOENT:
+            raise
+    return False
