@@ -11,7 +11,7 @@ __all__ = (
     'Iterator', 'Sequence', 'chain', 'ichain', 'islice', 'takewhile',
     'Mapping', 'MutableMapping', 'keys', 'values', 'items', 'chain_items',
     'update',
-    'namedtuple', 'sentinal', 'Undefined'
+    'namedtuple', 'deque', 'sentinal', 'Undefined'
 )
 
 
@@ -63,6 +63,7 @@ def update(obj, *args, **kwargs):
 ### Types
 
 namedtuple = coll.namedtuple
+deque = coll.deque
 
 class Sentinal(object):
     __slots__ = ('nonzero', )

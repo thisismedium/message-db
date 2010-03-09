@@ -9,7 +9,7 @@ from md import abc, fluid
 from . import store, yaml
 from .prelude import *
 
-__all__ = ('RepoErro', 'zipper')
+__all__ = ('RepoErro', 'TransactionError', 'TransactionFailed', 'zipper')
 
 class RepoError(store.StoreError):
     """General-case exception for this module."""
@@ -30,10 +30,22 @@ class zipper(object):
     >>> zs = zipper(store.back.memory()).create().open()
     >>> zs
     zipper(...)
-    >>> zs.transactionally(zs.update, a=1, b=2).items()
+    >>> zs.transactionally(zs.checkpoint, a=1, b=2).items()
     tree([('a', 1), ('b', 2)])
-    >>> zs.transactionally(zs.update, a=Deleted, b=3, c=4).items()
+    >>> zs.transactionally(zs.checkpoint, a=Deleted, b=3, c=4).items()
     tree([('b', 3), ('c', 4)])
+    >>> print '\\n'.join(repr(c) for c in checkpoints(zs))
+    <checkpoint Anonymous <nobody@example.net> ...>
+    <checkpoint Anonymous <nobody@example.net> ...>
+    <checkpoint Anonymous <nobody@example.net> ...>
+
+    >>> zs.transactionally(zs.commit, d=5).items()
+    tree([('b', 3), ('c', 4), ('d', 5)])
+    >>> print '\\n'.join(repr(c) for c in commits(zs))
+    <commit Anonymous <nobody@example.net> ...>
+    <commit Anonymous <nobody@example.net> ...>
+    >>> print '\\n'.join(repr(c) for c in checkpoints(zs))
+    <checkpoint Anonymous <nobody@example.net> ...>
     """
 
     HEAD = 'HEAD'
@@ -73,12 +85,13 @@ class zipper(object):
             self._objects.close()
         return self
 
-    def create(self):
+    def create(self, msg='Created'):
         if self.is_open():
             raise RepoError('Cannot create an open repository.')
         try:
             self._open()
-            head = refput(self, empty_checkpoint(self, [empty_commit(self)]))
+            with message(msg):
+                head = refput(self, empty_checkpoint(self, empty_commit(self)))
             self._state.add(self.HEAD, head)
             return self
         except store.NotStored:
@@ -137,9 +150,16 @@ class zipper(object):
         except store.NotStored:
             raise TransactionFailed('Try again.')
 
-    def update(self, seq=(), **kw):
+    def checkpoint(self, seq=(), **kw):
         refs = ((k, reference(self, v)) for (k, v) in chain_items(seq, kw))
-        return next_checkpoint(self, make_changeset(self._changes, refs))
+        changes = make_changeset(self._manifest, self._changes, refs)
+        return next_checkpoint(self, changes)
+
+    def commit(self, seq=(), **kw):
+        refs = ((k, reference(self, v)) for (k, v) in chain_items(seq, kw))
+        manifest = make_manifest(self._manifest, self._changes, refs)
+        commit = next_commit(self, manifest)
+        return empty_checkpoint(self, refput(self, commit))
 
     def items(self):
         return tree(self.iteritems())
@@ -208,11 +228,24 @@ def constant(name):
 
     return value
 
-def struct(cls):
+class StructureType(StructType):
+    def __new__(mcls, name, bases, attr):
+        cls = StructType.__new__(mcls, name, bases, attr)
+
+        @represent(name, cls, ns=BUILTIN)
+        def repr(value):
+            return list(value)
+
+        @construct(name, ns=BUILTIN)
+        def make(value):
+            return cls(*value)
+
+        return cls
+
+def structure(name, *args, **kw):
     """Marshall a named tuple in the "built-in" namespace.
 
-    >>> @struct
-    ... class foo(namedtuple('foo', 'a b')):
+    >>> class foo(structure('foo', 'a b')):
     ...     pass
     >>> data = yaml.dumps(foo(1, 2)); data
     '!!.foo [1, 2]\\n'
@@ -220,18 +253,8 @@ def struct(cls):
     foo(a=1, b=2)
     """
 
-    name = cls.__name__
-
-    @represent(name, cls, ns=BUILTIN)
-    def repr_struct(value):
-        return list(value)
-
-    @construct(name, ns=BUILTIN)
-    def make_struct(value):
-        return cls(*value)
-
-    return cls
-
+    kw.setdefault('metaclass', StructureType)
+    return struct(name, *args, **kw)
 
 ### History
 
@@ -248,30 +271,29 @@ changeset = tree
 class Reference(object):
     __metaclass__ = abc.ABCMeta
 
-@struct
-@abc.implements(Reference)
-class sref(namedtuple('sref', 'address')):
+class Static(Reference):
+    pass
+
+@abc.implements(Static)
+class sref(structure('_sref', 'address', weak=True)):
     """A reference to a value in the static keyspace."""
 
-    # __slots__ = ('__weakref__', )
-    # INTERNED = weakref.WeakValueDictionary()
+    INTERNED = weakref.WeakValueDictionary()
 
-    # def __new__(cls, address):
-    #     obj = cls.INTERNED.get(address)
-    #     if obj is None:
-    #         value = cls.__bases__[0].__new__(cls, address)
-    #         obj = cls.INTERNED.setdefault(address, value)
-    #     return obj
+    def __new__(cls, address):
+        obj = cls.INTERNED.get(address)
+        if obj is None:
+            value = cls.__bases__[0].__new__(cls, address)
+            obj = cls.INTERNED.setdefault(address, value)
+        return obj
 
     def __hash__(self):
         return hash(self.address)
 
-@struct
-class commit(namedtuple('commit', 'author when message changes prev')):
+class commit(structure('commit', 'author when message changes prev')):
     """A commit history is a linked list of commits.  An individual
-    commit records a manifest (i.e. changes)"""
-
-    __slots__ = ()
+    commit records a manifest (i.e. changes) that keys in a logical
+    keyspace to static identifiers in a write-once keyspace."""
 
     def __repr__(self):
         return '<%s %s on %s: %r>' % (
@@ -285,9 +307,11 @@ class commit(namedtuple('commit', 'author when message changes prev')):
     def date(self):
         return datetime.fromtimestamp(self.when)
 
-@struct
-class checkpoint(namedtuple('checkpoint', 'author when message changes commits prev')):
-    __slots__ = ()
+class checkpoint(structure('checkpoint', 'author when message changes commits prev')):
+    """A checkpoint is a partial manifest that represents changes
+    since the last commit.  The changeset may contain non-static
+    references such as Deleted or Conflict sentinals.  A checkpoint
+    may be made against multiple commits; this is a merge."""
 
     def __repr__(self):
         return '<%s %s on %s: %r>' % (
@@ -443,6 +467,8 @@ def zop(proc):
         return proc(zs, *args, **kwargs)
     return internal
 
+## Repository Information
+
 @zop
 def last_checkpoint(zs):
     return zs.deref(zs.head)
@@ -463,6 +489,38 @@ def last_changeset(zs):
 def last_manifest(zs):
     commit = last_commit(zs)
     return zs.deref(commit.changes) if commit else manifest()
+
+def checkpoints(zs):
+    """Checkpoints since the last commit."""
+
+    return (c for (r, c) in ancestors(zs, [zs.head]))
+
+def commits(zs):
+    """Iterate over the commit history (most recent commits are
+    first)."""
+
+    check = last_checkpoint(zs)
+    if not (check and check.commits):
+        return ()
+    return (c for (r, c) in ancestors(zs, check.commits))
+
+@zop
+def ancestors(zs, refs):
+    """Breadth-first traversal over unique ancestors."""
+
+    queue = deque(zs.mderef(refs))
+    visited = set()
+
+    while queue:
+        (ref, commit) = queue.popleft()
+        if ref.address in visited:
+            continue
+        else:
+            queue.extend(zs.mderef(commit.prev))
+            yield (ref, commit)
+            visited.add(ref.address)
+
+## Repository Manipulation
 
 def reference(zs, obj):
     return obj if isinstance(obj, Reference) else refput(zs, obj)
@@ -492,13 +550,35 @@ def make_commit(zs, changes, *prev):
 def empty_commit(zs, *prev):
     return make_commit(zs, manifest(), *prev)
 
-def empty_checkpoint(zs, commits, *prev):
-    return make_checkpoint(zs, changeset(), commits, *prev)
+def empty_checkpoint(zs, commit):
+    return make_checkpoint(zs, changeset(), [commit])
 
-def make_changeset(orig, *args, **kwargs):
-    return update(orig.copy(), *args, **kwargs)
+def make_changeset(manifest, changes, updates):
+    changes = changes.copy()
+    for (key, ref) in items(updates):
+        if ref is Deleted and key not in manifest:
+            changes.pop(key, None)
+        else:
+            changes[key] = ref
+    return changes
+
+def make_manifest(manifest, changes, updates):
+    changes = make_changeset(manifest, changes, updates)
+    manifest = manifest.copy()
+    for (key, ref) in changes.iteritems():
+        if ref is Deleted:
+            del manifest[key]
+        else:
+            assert isinstance(ref, Static), 'Not static: <%r, %r>.' % (key, ref)
+            manifest[key] = ref
+    return manifest
 
 @zop
 def next_checkpoint(zs, changes):
     check = last_checkpoint(zs)
     return make_checkpoint(zs, changes, check.commits, check)
+
+@zop
+def next_commit(zs, changes):
+    check = last_checkpoint(zs)
+    return make_commit(zs, changes, *check.commits)

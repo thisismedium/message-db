@@ -4,13 +4,14 @@
 """collections -- collection data types"""
 
 from __future__ import absolute_import
-import copy, bisect, collections as coll, itertools as it
+import re, sys, copy, bisect, keyword, collections as coll, itertools as it
 from md import abc
 from ._prelude import *
 
 __all__ = (
     'Tree', 'MutableTree', 'tree',
-    'OrderedMap', 'MutableOrderedMap', 'omap'
+    'OrderedMap', 'MutableOrderedMap', 'omap',
+    'StructType', 'struct'
 )
 
 
@@ -207,4 +208,127 @@ class omap(OrderedDict):
 
     def extend(self, items):
         self.update(items)
+
+
+### Structure
+
+def struct(name, fields, weak=False, metaclass=None):
+    """Create a structure class called name with the given fields.
+    This works like a namedtuple, but uses __slots__.
+
+    >>> class Foo(struct('foo', 'a b')):
+    ...     pass
+    >>> foo = Foo(1, 2); foo
+    Foo(a=1, b=2)
+    """
+    if isinstance(fields, basestring):
+        fields = fields.split()
+
+    seen = set()
+    for field in fields:
+        if field in seen:
+            raise ValueError('Duplicate field name: %r.' % field)
+        elif keyword.iskeyword(field):
+            raise ValueError('%r is a keyword.' % field)
+        elif not is_public_identifier(field):
+            raise ValueError('%r is not a valid public identifier.' % field)
+        seen.add(field)
+
+    slots = tuple(fields)
+    if weak:
+        slots += ('__weakref__', )
+    args = ', '.join(fields)
+    new = '\n        '.join('self.%s = %s' % (f, f) for f in fields)
+
+    template = '''
+class %(name)s(object):
+    __metaclass__ = metaclass
+    __slots__ = %(slots)r
+
+    def __new__(_cls, %(args)s):
+        self = object.__new__(_cls)
+        %(new)s
+        return self
+
+    def __repr__(self):
+        return '%%s(%%s)' %% (
+            type(self).__name__,
+            ', '.join('%%s=%%r' %% (n, getattr(self, n)) for n in self.__all__)
+        )
+
+    def __iter__(self):
+        return (getattr(self, n) for n in self.__all__)
+
+    def __getnewargs__(self):
+        return tuple(self)
+
+    def __eq__(self, _other):
+        if isinstance(_other, %(name)s):
+            return all(
+                getattr(self, n) == getattr(_other, n)
+                for n in self.__all__
+            )
+        return NotImplemented
+
+    def __ne__(self, _other):
+        if isinstance(_other, %(name)s):
+            return not self == _other
+        return NotImplemented
+
+'''
+
+    env = {
+        '__name__': 'struct_%s' % name,
+        '__builtins__': {
+            'metaclass': (metaclass or StructType),
+            'object': object,
+            'getattr': getattr,
+            'tuple': tuple,
+            'type': type,
+            'isinstance': isinstance,
+            'all': all,
+            'NotImplemented': NotImplemented
+        }
+    }
+
+    try:
+        code = template % locals()
+        exec code in env
+    except SyntaxError as exc:
+        raise SyntaxError('%s:\n%s' % (exc.message, code))
+
+    result = env[name]
+    result.__module__ = frame_module(1)
+    return result
+
+class StructType(type):
+
+    def __new__(mcls, name, bases, attr):
+        if '__slots__' not in attr:
+            attr['__slots__'] = ()
+
+        cls = type.__new__(mcls, name, bases, attr)
+        cls.__all__ = tuple(slots(cls))
+
+        return cls
+
+def slots(cls):
+    """Return a sequence of all slots in a class in MRO definition
+    order."""
+
+    return (
+        s for c in reversed(cls.__mro__)
+        if hasattr(c, '__slots__')
+        for s in c.__slots__
+        if not s.startswith('_')
+    )
+
+IDENT = re.compile(r'^[a-zA-Z]\w*$')
+def is_public_identifier(name):
+    return isinstance(name, basestring) and IDENT.match(name)
+
+def frame_module(n, default='__main__'):
+    if not hasattr(sys, '_getframe'):
+        return default
+    return sys._getframe(n + 1).f_globals.get('__name__', default)
 
