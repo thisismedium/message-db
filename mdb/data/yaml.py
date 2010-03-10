@@ -5,8 +5,7 @@
 
 from __future__ import absolute_import
 import yaml
-from .prelude import *
-from . import collections as coll
+from md.prelude import *
 
 __all__ = (
     'load', 'loads', 'dump', 'dumps',
@@ -46,9 +45,9 @@ def dump(data, stream):
 def dumps(data):
     """Serialize data to YAML; return a string.
 
-    >>> dumps(coll.tree(c=1, b=2, m=3))
+    >>> dumps(tree(c=1, b=2, m=3))
     '{b: 2, c: 1, m: 3}\\n'
-    >>> dumps(coll.omap([('c', 1), ('b', 2), ('m', 3)]))
+    >>> dumps(omap([('c', 1), ('b', 2), ('m', 3)]))
     '!!omap [{c: 1}, {b: 2}, {m: 3}]\\n'
     """
 
@@ -58,9 +57,9 @@ def pretty(data, stream=None):
     """Serialize data to un-flowed YAML.  Write the YAML to stream;
     otherwise return a string.
 
-    >>> pretty(coll.tree(c=1, b=2, m=3))
+    >>> pretty(tree(c=1, b=2, m=3))
     'b: 2\\nc: 1\\nm: 3\\n'
-    >>> pretty(coll.omap([('c', 1), ('b', 2), ('m', 3)]))
+    >>> pretty(omap([('c', 1), ('b', 2), ('m', 3)]))
     '!!omap\\n- c: 1\\n- b: 2\\n- m: 3\\n'
     """
     return yaml.dump(data, stream, Dumper, default_flow_style=False)
@@ -108,8 +107,8 @@ def add_constructor(tag, construct):
     Constructor.add_constructor(tag, construct)
     return construct
 
-def yaml_tag(tag, ns='m/'):
-    return u'tag:yaml.org,2002:%s%s' % (ns, tag)
+def yaml_tag(tag, ns=None):
+    return u'tag:yaml.org,2002:%s%s' % (ns or 'm/', tag)
 
 def make_node(load, proc, node):
     if isinstance(node, yaml.MappingNode):
@@ -123,8 +122,8 @@ class Constructor(yaml.constructor.SafeConstructor):
     """Override the default behavior of SafeConstructor to make maps
     and pairs into tree objects."""
 
-    MapType = coll.tree
-    OMapType = coll.omap
+    MapType = tree
+    OMapType = omap
     AllowedPairsNodes = (yaml.SequenceNode, yaml.MappingNode)
 
     def construct_yaml_map(self, node):
@@ -184,11 +183,11 @@ def repr_tagged(dumper, tag, value):
 
 Representer = yaml.representer.SafeRepresenter
 
-@partial(add_representer, coll.tree)
+@partial(add_representer, tree)
 def repr_tree(dumper, data):
     return dumper.represent_mapping(u'tag:yaml.org,2002:map', data.iteritems())
 
-@partial(add_representer, coll.omap)
+@partial(add_representer, omap)
 def repr_odict(dumper, data):
     return repr_pairs(dumper, u'tag:yaml.org,2002:omap', data.iteritems())
 

@@ -4,8 +4,8 @@
 """memory -- in-memory backing store"""
 
 from __future__ import absolute_import
+from md.prelude import *
 from .interface import *
-from ..prelude import *
 
 __all__ = ('memory', )
 

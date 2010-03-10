@@ -28,3 +28,7 @@ class Logical(object):
     @property
     def _back(self):
         """The real backing store."""
+
+    @property
+    def _marshall(self):
+        """Load/dump values."""

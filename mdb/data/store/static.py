@@ -5,9 +5,9 @@
 
 from __future__ import absolute_import
 from hashlib import sha1
+from md.prelude import *
 from md import abc
 from .interface import *
-from ..prelude import *
 
 __all__ = ('static', )
 
@@ -24,7 +24,6 @@ class static(object):
 
     def __init__(self, back, marshall, prefix='', cache=DEFAULT_CACHE_SIZE):
         if isinstance(back, Logical):
-            prefix = back._prefix + prefix
             back = back._back
         self._back = back
         self._marshall = marshall

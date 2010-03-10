@@ -5,8 +5,8 @@
 
 from __future__ import absolute_import
 import unittest
+from md.prelude import *
 from . import *
-from ..prelude import *
 
 class TestBackingStore(object):
 
@@ -66,7 +66,8 @@ class TestFSDir(TestBackingStore, unittest.TestCase):
 class TestPrefixed(TestBackingStore, unittest.TestCase):
 
     def makeStore(self):
-        return back.prefixed(back.memory(), '#')
+        from .. import yaml
+        return back.prefixed(back.memory(), '#', yaml)
 
 class TestMemory(TestBackingStore, unittest.TestCase):
 
@@ -98,8 +99,6 @@ class TestStatic(unittest.TestCase):
         self.assertEqual(v1, v3)
 
     def test_data(self):
-        from ..collections import tree, omap
-
         t1 = tree(a=1, z=2, m=3, b=4)
         (k1, _) = self.back.put(t1)
         (k2, v2) = self.back.put(tree(a=1, z=2, m=3, b=4))

@@ -5,9 +5,9 @@
 
 from __future__ import absolute_import
 import datetime, weakref, time
+from md.prelude import *
 from md import abc, fluid
 from . import store, yaml
-from .prelude import *
 
 __all__ = ('RepoErro', 'TransactionError', 'TransactionFailed', 'zipper')
 
@@ -25,7 +25,19 @@ class TransactionFailed(RepoError):
 ### High-level interface
 
 class zipper(object):
-    """A manifest-driven versioning implementation.
+    """A manifest-driven versioned keyspace.  Logical keys are mapped
+    to static references in a write-once keyspace through a manifest.
+
+    As the logical keyspace is "mutated", the manifest is updated.
+    The updated manifest is tracked through a linked list of
+    checkpoints and commits.  A commit encapsulates an entire
+    manifest.  A checkpoint encapsulates a delta against a
+    commit/manifest.
+
+    Checkpoints are private to the branch and may contain
+    "intermediate" references such as Deleted sentinal or Conflict
+    markers.  Commits are public; they may be cloned into new branches
+    or merged into other branches.
 
     >>> zs = zipper(store.back.memory()).create().open()
     >>> zs
@@ -51,8 +63,8 @@ class zipper(object):
     HEAD = 'HEAD'
 
     def __init__(self, state, objects=None, marshall=yaml, author=None):
-        self._state = state
-        self._objects = store.back.static(state, marshall, 'objects')
+        self._state = store.back.prefixed(state, '', marshall)
+        self._objects = store.back.static(state, marshall, 'objects/')
         self.author = author or anonymous
         self.head = None
 
@@ -85,13 +97,12 @@ class zipper(object):
             self._objects.close()
         return self
 
-    def create(self, msg='Created'):
+    def create(self):
         if self.is_open():
             raise RepoError('Cannot create an open repository.')
         try:
             self._open()
-            with message(msg):
-                head = refput(self, empty_checkpoint(self, empty_commit(self)))
+            head = refput(self, empty_checkpoint(self, self._create()))
             self._state.add(self.HEAD, head)
             return self
         except store.NotStored:
@@ -151,15 +162,14 @@ class zipper(object):
             raise TransactionFailed('Try again.')
 
     def checkpoint(self, seq=(), **kw):
-        refs = ((k, reference(self, v)) for (k, v) in chain_items(seq, kw))
+        refs = mref(self, chain_items(seq, kw))
         changes = make_changeset(self._manifest, self._changes, refs)
         return next_checkpoint(self, changes)
 
     def commit(self, seq=(), **kw):
-        refs = ((k, reference(self, v)) for (k, v) in chain_items(seq, kw))
+        refs = mref(self, chain_items(seq, kw))
         manifest = make_manifest(self._manifest, self._changes, refs)
-        commit = next_commit(self, manifest)
-        return empty_checkpoint(self, refput(self, commit))
+        return empty_checkpoint(self, next_commit(self, manifest))
 
     def items(self):
         return tree(self.iteritems())
@@ -175,6 +185,9 @@ class zipper(object):
             self._refs = self._rebuild_index()
             return True
         return False
+
+    def _create(self):
+        return empty_commit(self)
 
     def _rebuild_index(self):
         self._manifest = last_manifest(self)
@@ -193,6 +206,80 @@ class zipper(object):
 
     def _mget(self, addresses):
         return self._objects.mget(addresses)
+
+class repo(zipper):
+    """A repository tracks branches over a common static space.  Each
+    branch is given a private keyspace for state.  The keyspace of the
+    "real" backing store is partioned in this way:
+
+       repo state:   ...
+       branch state: refs/{{branch}}/...
+       static space: objects/...
+
+    >>> r = repo(store.back.memory()).create().open()
+    >>> b = r.branch('foo').create().open()
+    >>> print '\\n'.join(str(c) for c in commits(r))
+    <commit Anonymous <nobody@example.net> ...: "Add branch 'foo'.">
+    <commit Anonymous <nobody@example.net> ...>
+    >>> b.transactionally(b.checkpoint, a='a-value').items()
+    tree([('a', 'a-value')])
+    """
+
+    def branch(self, name):
+        name = str(name)
+        state = store.back.prefixed(self._state, self._qualify(name))
+        return branch(name, self, state, self._objects)
+
+    def branches(self):
+        return list(self.branch(n) for n in self._branches())
+
+    def add(self, branch):
+        return self.transactionally(self._add, branch)
+
+    def remove(self, branch):
+        return self.transactionally(self._remove, branch)
+
+    def _create(self):
+        return init_commit(self, branches=tree())
+
+    def _branches(self):
+        return self.get('branches')
+
+    def _add(self, branch):
+        with message('Add branch %r.' % branch.name):
+            branches = self._branches().copy()
+            branches[branch.name] = self._config(branch)
+            return self.commit(branches=branches)
+
+    def _remove(self, branch):
+        with message('Remove branch %r.' % branch.name):
+            branches = self._branches().copy()
+            del branches[branch.name]
+            return self.commit(branches=branches)
+
+    def _qualify(self, name):
+        if not name.startswith('refs/'):
+            name = 'refs/%s/' % name.strip('/')
+        return name
+
+    def _config(self, branch):
+        return tree(owner=self.author(), config=tree())
+
+class branch(zipper):
+    """A branch keeps state in a private keyspace and uses a common
+    static space shared among all branches in a repository."""
+
+    def __init__(self, name, repo, *args, **kw):
+        super(branch, self).__init__(*args, **kw)
+        self.name = name
+        self.repo = repo
+
+    def __repr__(self):
+        return '%s(%r, %r)' % (type(self).__name__, self.name, self.repo)
+
+    def create(self):
+        self.repo.add(super(branch, self).create())
+        return self
 
 
 ### Marshalling
@@ -522,8 +609,23 @@ def ancestors(zs, refs):
 
 ## Repository Manipulation
 
-def reference(zs, obj):
+def ref(zs, obj):
     return obj if isinstance(obj, Reference) else refput(zs, obj)
+
+def mref(zs, pairs):
+    ## FIXME: do performance testing against
+    ##  return ((k, ref(zs, v)) for (k, v) in pairs)
+
+    vmap = {}
+    for item in items(pairs):
+        if isinstance(item[1], Reference):
+            yield item
+        else:
+            vmap[id(item[1])] = item
+
+    for (ref, val) in zs.mput(v for (_, v) in vmap.itervalues()):
+        (key, _) = vmap[id(val)]
+        yield (key, ref)
 
 def refput(zs, obj):
     return zs.put(obj)[0]
@@ -533,9 +635,9 @@ def make_checkpoint(zs, changes, commits, *prev):
         zs.author(),
         now(),
         message(),
-        reference(zs, changes),
-        list(reference(zs, c) for c in commits),
-        list(reference(zs, p) for p in prev)
+        ref(zs, changes),
+        list(ref(zs, c) for c in commits),
+        list(ref(zs, p) for p in prev)
     )
 
 def make_commit(zs, changes, *prev):
@@ -543,8 +645,8 @@ def make_commit(zs, changes, *prev):
         zs.author(),
         now(),
         message(),
-        reference(zs, changes),
-        list(reference(zs, p) for p in prev)
+        ref(zs, changes),
+        list(ref(zs, p) for p in prev)
     )
 
 def empty_commit(zs, *prev):
@@ -552,6 +654,9 @@ def empty_commit(zs, *prev):
 
 def empty_checkpoint(zs, commit):
     return make_checkpoint(zs, changeset(), [commit])
+
+def init_commit(zs, **changes):
+    return make_commit(zs, manifest(mref(zs, changes)))
 
 def make_changeset(manifest, changes, updates):
     changes = changes.copy()

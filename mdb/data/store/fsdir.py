@@ -5,8 +5,8 @@
 
 from __future__ import absolute_import
 import threading, hashlib, zlib, gzip, random
+from md.prelude import *
 from .. import os
-from ..prelude import *
 from .interface import *
 
 __all__ = ('fsdir', )
