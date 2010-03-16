@@ -12,7 +12,7 @@ __all__ = (
     'Path', 'Sequence', 'sequence', 'steps', 'filter', 'predicate',
     'self', 'parent', 'child', 'attribute', 'ancestor', 'ancestor_or_self',
     'descendant', 'descendant_or_self', 'following_sibling', 'following',
-    'preceeding_sibling', 'preceeding'
+    'preceding_sibling', 'preceding'
 )
 
 
@@ -316,11 +316,11 @@ def following(item):
     return (d for i in after(item) for d in orself(i, descend))
 
 @axis(Step)
-def preceeding_sibling(item):
+def preceding_sibling(item):
     return before(item)
 
 @axis(Step)
-def preceeding(item):
+def preceding(item):
     return (d for i in before(item) for d in orself(i, descend))
 
 

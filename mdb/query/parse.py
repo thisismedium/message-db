@@ -4,7 +4,7 @@
 """parse -- parse path queries"""
 
 from __future__ import absolute_import
-import sys, functools
+import os, sys, functools, importlib
 from ply import lex, yacc
 
 __all__ = ('PathParser', 'path')
@@ -12,7 +12,7 @@ __all__ = ('PathParser', 'path')
 
 ### Parser
 
-def Parser(tokens, ast):
+def Parser(tokens, ast, optimize=True):
     """Make a path parser.
 
     The grammar is a generalized form of XPath 2.0.  Reading the XPath
@@ -318,16 +318,29 @@ def Parser(tokens, ast):
     def p_error(p):
         raise BadToken(p)
 
-    return yacc.yacc()
+    return yacc.yacc(
+        tabmodule=_table('_parsetab', optimize),
+        outputdir=os.path.dirname(__file__),
+        optimize=optimize,
+        debug=(not optimize)
+    )
 
 def extend(seq, *items):
     seq.extend(items)
     return seq
 
+def _table(name, optimize):
+    if not optimize:
+        return name
+    try:
+        return importlib.import_module('..%s' % name, __name__)
+    except ImportError:
+        return name
+
 
 ### Lexer
 
-def Lexer():
+def Lexer(optimize=True):
     """A Path lexer."""
 
     tokens = [
@@ -402,7 +415,13 @@ def Lexer():
     def t_error(t):
         print 'Illegal character %r at %r' % (t.value[0], t.value[0:15])
 
-    return (tokens, lex.lex())
+    lexer = lex.lex(
+        lextab=_table('_lextab', optimize),
+        outputdir=os.path.dirname(__file__),
+        optimize=optimize,
+        debug=(not optimize)
+    )
+    return (tokens, lexer)
 
 
 ### AST
@@ -477,8 +496,9 @@ def parse(parser, lexer, data, debug=False):
 def PathParser(ast=AST, **kwargs):
     """Create a path parser using the given AST."""
 
-    (tokens, lexer) = Lexer()
-    parser = Parser(tokens, ast)
+    optimize = not kwargs.get('debug', False)
+    (tokens, lexer) = Lexer(optimize=optimize)
+    parser = Parser(tokens, ast, optimize=optimize)
     return functools.partial(parse, parser, lexer, **kwargs)
 
 path = PathParser() # default parser
