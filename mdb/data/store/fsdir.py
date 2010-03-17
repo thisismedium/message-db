@@ -28,7 +28,7 @@ class fsdir(object):
     def open(self):
         if self._cas is None:
             if not os.exists(self._path):
-                os.mkdirs(self._path)
+                os.makedirs(self._path)
             self._cas = self.CASType()
         return self
 

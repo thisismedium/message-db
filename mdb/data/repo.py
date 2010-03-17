@@ -9,7 +9,10 @@ from md.prelude import *
 from md import abc, fluid
 from . import store, yaml
 
-__all__ = ('RepoErro', 'TransactionError', 'TransactionFailed', 'zipper')
+__all__ = (
+    'RepoError', 'TransactionError', 'TransactionFailed', 'zipper',
+    'repository', 'branch', 'message'
+)
 
 class RepoError(store.StoreError):
     """General-case exception for this module."""
@@ -143,21 +146,25 @@ class zipper(object):
         return ((sref(a), v) for (a, v) in self._objects.mput(values))
 
     def transactionally(self, proc, *args, **kw):
-        (head, token) = self._state.gets(self.HEAD)
+        self.end_transaction(self.begin_transaction(), proc(*args, **kw))
+        return self
 
-        check = proc(*args, **kw)
+    def begin_transaction(self):
+        return self._state.gets(self.HEAD)
+
+    def end_transaction(self, (head, token), check):
         if not isinstance(check, checkpoint):
-            raise TransactionError('A transaction must return a checkpoint.')
+            raise TransactionError('Got %r, expected checkpoint.' % check)
 
         new_head = refput(self, check)
         if new_head == head:
-            return self
+            return False
 
         try:
             self._state.cas(self.HEAD, new_head, token)
             ## FIXME: pass check in to prvent unnecessary lookups.
             self._move_head(new_head)
-            return self
+            return True
         except store.NotStored:
             raise TransactionFailed('Try again.')
 
@@ -207,7 +214,7 @@ class zipper(object):
     def _mget(self, addresses):
         return self._objects.mget(addresses)
 
-class repo(zipper):
+class repository(zipper):
     """A repository tracks branches over a common static space.  Each
     branch is given a private keyspace for state.  The keyspace of the
     "real" backing store is partioned in this way:
@@ -216,7 +223,7 @@ class repo(zipper):
        branch state: refs/{{branch}}/...
        static space: objects/...
 
-    >>> r = repo(store.back.memory()).create().open()
+    >>> r = repository(store.back.memory()).create().open()
     >>> b = r.branch('foo').create().open()
     >>> print '\\n'.join(str(c) for c in commits(r))
     <commit Anonymous <nobody@example.net> ...: "Add branch 'foo'.">
@@ -681,6 +688,8 @@ def make_manifest(manifest, changes, updates):
 @zop
 def next_checkpoint(zs, changes):
     check = last_checkpoint(zs)
+    if not changes:
+        return check
     return make_checkpoint(zs, changes, check.commits, check)
 
 @zop

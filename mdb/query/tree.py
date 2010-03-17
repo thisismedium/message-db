@@ -12,7 +12,7 @@ __all__ = (
     'Path', 'Sequence', 'sequence', 'steps', 'filter', 'predicate',
     'self', 'parent', 'child', 'attribute', 'ancestor', 'ancestor_or_self',
     'descendant', 'descendant_or_self', 'following_sibling', 'following',
-    'preceding_sibling', 'preceding'
+    'preceding_sibling', 'preceding', 'sibling'
 )
 
 
@@ -323,6 +323,10 @@ def preceding_sibling(item):
 def preceding(item):
     return (d for i in before(item) for d in orself(i, descend))
 
+@axis(Step)
+def sibling(item):
+    return (x for x in item.folder if x != item)
+
 
 ### Aux
 
@@ -348,11 +352,11 @@ def descend(item):
             queue.extend(item)
 
 def before(item):
-    parent = item.parent
+    parent = item.folder
     return parent.before(item) if parent else ()
 
 def after(item):
-    parent = item.parent
+    parent = item.folder
     return parent.after(item) if parent else ()
 
 def unique(seq):

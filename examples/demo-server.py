@@ -8,12 +8,13 @@ is received the query is evaluated against the root of the content
 tree and matching items are returned in a JSON format.
 """
 
-import os, sys, json, xmpp, base64, collections as coll
+import os, sys, json, xmpp, base64
+from md import collections as coll
 from xmpp import xml
 from mdb import db
 
 def main(data):
-    top = db.init(data, os.path.basename(data))
+    top = db.setup(data, os.path.basename(data))
     server = xmpp.Server({
         'plugins': [(QueryServer, { 'root': top })],
         'users': { 'user': 'secret' },
@@ -44,34 +45,31 @@ class QueryServer(xmpp.Plugin):
 def dumps(obj):
     return base64.b64encode(json.dumps(dumps_value(obj)))
 
-def dumps_value(obj):
+def dumps_value(obj, rec=None):
+    if isinstance(obj, (type(None), bool, int, float, basestring)):
+        return obj
     if isinstance(obj, db.Item):
-        return dumps_model(obj)
+        return dumps_item(obj)
+    elif isinstance(obj, db.Key):
+        return str(obj)
     elif isinstance(obj, (coll.Sequence, coll.Iterator)):
-        return map(dumps_value, obj)
+        return map(rec or dumps_value, obj)
+    elif isinstance(obj, (coll.Tree, coll.OrderedMap)):
+        return [map(rec or dumps_value, i) for i in obj.iteritems()]
     return obj
 
-def dumps_model(obj):
+def dumps_item(obj):
     return dict(
-        ((n, dumps_property(getattr(obj, n))) for n in property_names(obj)),
-        kind=obj.kind(),
-        key=str(obj.key()),
+        ((n, dumps_property(v)) for (n, v) in db.describe(obj)),
+        kind=obj.kind,
+        key=str(obj.key),
+        _path=db.path(obj)
     )
 
 def dumps_property(value):
     if isinstance(value, db.Item):
-        value = value.key()
-    if isinstance(value, db.Key):
-        return str(value)
-    elif isinstance(value, list):
-        return map(dumps_property, value)
-    return value
-
-def property_names(obj):
-    for key in obj.properties().iterkeys():
-        yield key
-    for key in obj.dynamic_properties():
-        yield key
+        value = value.key
+    return dumps_value(value, dumps_property)
 
 if __name__ == '__main__':
     main(os.path.join(os.path.dirname(__file__), 'demo'))

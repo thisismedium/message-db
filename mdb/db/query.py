@@ -70,7 +70,7 @@ class Query(object):
         return self._axis(tree.ancestor, *args)
 
     def prevAll(self, *args):
-        return self._axis(tree.preceeding, *args)
+        return self._axis(tree.preceding, *args)
 
     def nextAll(self, *args):
         return self._axis(tree.following, *args)

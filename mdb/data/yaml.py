@@ -72,7 +72,7 @@ def represent(tag, cls, ns=None):
     ... def repr_foo(value):
     ...     return value._asdict()
     >>> dumps(foo(a=1, b=2))
-    '!!m/foo {a: 1, b: 2}\\n'
+    '!!M.foo {a: 1, b: 2}\\n'
     """
     tag = yaml_tag(tag, ns)
     def decorator(proc):
@@ -89,7 +89,7 @@ def construct(tag, ns=None):
     >>> @construct('foo')
     ... def make_foo(value):
     ...     return foo(**value)
-    >>> loads('!!m/foo {a: 1, b: 2}\\n')
+    >>> loads('!!M.foo {a: 1, b: 2}\\n')
     foo(a=1, b=2)
     """
 
@@ -108,7 +108,7 @@ def add_constructor(tag, construct):
     return construct
 
 def yaml_tag(tag, ns=None):
-    return u'tag:yaml.org,2002:%s%s' % (ns or 'm/', tag)
+    return u'tag:yaml.org,2002:%s%s' % (ns or 'M.', tag)
 
 def make_node(load, proc, node):
     if isinstance(node, yaml.MappingNode):

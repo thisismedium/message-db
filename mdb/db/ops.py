@@ -8,10 +8,10 @@
 ## entirely into the global path evaluation context.
 
 from __future__ import absolute_import
-from . import datastore as _ds
+from . import models as _m
 
 ## Support query_ast.NamedTest
-kind = _ds.kind
+kind = _m.model
 
 def get(*keys):
     """Abandon the current context; produce a sequence of items

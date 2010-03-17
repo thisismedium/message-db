@@ -18,7 +18,7 @@ def usage():
     sys.exit(1)
 
 def main(data, expr):
-    top = db.init(data, os.path.basename(data))
+    top = db.setup(data, os.path.basename(data))
     query = db.query(expr)
     print 'Result of %r:' % expr
     result = query(top)

@@ -1,0 +1,97 @@
+The Wikipedia article about XPath 1.0 is also a good introduction to
+the concepts <http://en.wikipedia.org/wiki/XPath_1.0>.  Our query
+parser is based on XPath 2.0, but I couldn't find a good intro to
+XPath 2.0.
+
+## Paths
+
+A path is a sequence of steps joined by '/'.  If a path starts with
+'/', it's absolute.  Without a leading '/', it's relative to a context
+node (which currently defaults to the root).
+
+A step can be an "axis" step (change in direction with a primary named
+filter or wildcard), a "predicate" (arbitrary filters delimited by
+square brackets), or "generator" expressions (they look like procedure
+calls).
+
+Shortcuts are expanded by the parser:
+
+     //Folder/article-1  =>  /descendant-or-self::Folder/self::article-1
+
+
+## Shortcuts
+
+These are the shortcuts that are expanded into a "normalized" syntax
+by the parser:
+
+      /foo => /child::foo
+      //foo => /descendant-or-self::foo
+      . => self::focus()
+      .. => parent::focus()
+      @foo => attribute::foo
+
+## Axis Steps
+
+These axis steps are available (foo could be a name, type name, or '*'
+to match anything).  An axis takes the current nodeset and transforms
+it by finding things matching "foo" in a certain direction.
+
+      self::foo -- anything in the current nodeset that matches foo
+
+      parent::foo -- set of parents of current nodeset that match foo
+
+      children::foo -- unique set of children of the current nodeset
+       that match foo
+
+      ancestor::foo -- ancestors of the current nodeset matching foo
+
+      ancestor-or-self::foo -- like ancestor, also includes the
+       current nodeset
+
+      descendant::foo -- unique descendants of the current nodeset
+       matching foo
+
+      descendant-or-self::foo -- like descendant, also includes the
+       current nodeset
+
+      following-sibling::foo -- any sibling that comes after an item
+       in the nodeset
+
+      following::foo -- any descendant of nodes in the current set, or
+       any following sibling, or any descendant of a following sibling
+
+      preceding-sibling::foo -- any sibling that comes before an item
+       in the nodeset
+
+      preceding::foo -- like following
+
+## Predicates
+
+You can also add predicate expressions using square brackets.  The
+stuff in the square brackets can be any expression.  The '@' symbol is
+a shortcut for switching to the attribute axis.  Just a number is a
+shortcut for filtering on the position of an item in the nodeset.
+Expressions can be combined with and/or, negated with not (!), wrapped
+in parens, etc.
+
+    //Page[1] => The second Page (zero indexed).
+
+    //.[@name="foo"] => Anything with a name property equal to "foo"
+
+    //.[@name="foo" or @name="bar"] => Anything with a name equal to
+     "foo" or "bar"
+
+    //.[@name="foo"][@visible=True] => Anything with a name equal to
+     "foo" that's also visible
+
+## Generators (also called Filters)
+
+We can plug generator procedures (which XPath calls "filters") in as a
+path step.  There are only a few of these so far:
+
+     get('foo', 'bar') => Return the items with keys 'foo' and 'bar'
+      (equivalent to something like //.[@key='foo' or @key='bar'], but
+      more efficient).
+
+     last() => Return the last item in the current nodeset (opposite
+      of using the predicate "[0]")
