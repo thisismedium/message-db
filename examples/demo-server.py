@@ -8,7 +8,7 @@ is received the query is evaluated against the root of the content
 tree and matching items are returned in a JSON format.
 """
 
-import os, sys, json, xmpp, base64
+import os, sys, json, xmpp, base64, hashlib
 from md import collections as coll
 from xmpp import xml
 from mdb import db
@@ -30,11 +30,30 @@ class QueryServer(xmpp.Plugin):
 
     @xmpp.iq('{urn:message}query')
     def message_query(self, iq):
-        assert iq.get('type') == 'get'
-        expr = base64.b64decode(xml.child(iq, '{urn:message}query/text()'))
+        return self._get(iq, self._query)
+
+    def _query(self, expr):
+        return db.query(expr)(self.root)
+
+    @xmpp.iq('{urn:message}schema')
+    def message_schema(self, iq):
+        return self._get(iq, db.model)
+
+    def _get(self, iq, method):
         try:
-            result = dumps(db.query(expr)(self.root))
-            self.iq('result', iq, self.E.query({ 'xmlns': 'urn:message'}, result))
+            if iq.get('type') != 'get':
+                raise ValueError("Expected type 'get', not %r." % iq.get('type'))
+            expr = base64.b64decode(iq[0].text)
+        except (ValueError, AttributeError) as exc:
+            return self.error(iq, 'modify', 'bad-request', str(exc))
+
+        try:
+            result = dumps(method(expr))
+            match = hashlib.md5(result).hexdigest()
+            self.iq('result', iq, self.E.query({
+                'xmlns': 'urn:message',
+                'match': match
+            }, result))
         except SyntaxError as exc:
             self.error(iq, 'modify', 'undefined-condition', str(exc))
 
@@ -48,7 +67,12 @@ def dumps(obj):
 def dumps_value(obj, rec=None):
     if isinstance(obj, (type(None), bool, int, float, basestring)):
         return obj
-    if isinstance(obj, db.Item):
+    elif isinstance(obj, type):
+        if issubclass(obj, db.Model):
+            return dumps_model(obj)
+        else:
+            return obj.__name__
+    elif isinstance(obj, db.Item):
         return dumps_item(obj)
     elif isinstance(obj, db.Key):
         return str(obj)
@@ -70,6 +94,20 @@ def dumps_property(value):
     if isinstance(value, db.Item):
         value = value.key
     return dumps_value(value, dumps_property)
+
+def dumps_model(value):
+    return {
+        'type': 'record',
+        'name': value.kind,
+        'fields': list(
+            dict(
+                (dumps_value(k), (dumps_value(v)))
+                for (k, v) in db.describe(p)
+                if v
+            )
+            for p in db.properties(value).itervalues()
+        )
+    }
 
 if __name__ == '__main__':
     main(os.path.join(os.path.dirname(__file__), 'demo'))

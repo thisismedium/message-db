@@ -57,8 +57,35 @@ class TextProperty(_m.Property):
 
 serialize(_m.Key, str, _m.Key)
 
+class Ref(_m.Key):
+
+    DERIVATIVES = weakref.WeakValueDictionary()
+
+    @classmethod
+    def derive(cls, Type):
+        name = '%s.%s' % (cls.__name__, Type.__name__)
+
+        probe = cls.DERIVATIVES.get(name)
+        if probe is None:
+            probe = cls.DERIVATIVES[name] = serialize(cls._derive(name, Type))
+        return probe
+
+    @classmethod
+    def _derive(cls, name, Type):
+        return type(name, (cls,), {
+            'INTERNED': weakref.WeakValueDictionary()
+        })
+
+    @classmethod
+    def _dump(cls, val):
+        return str(val)
+
+    @classmethod
+    def _load(cls, val):
+        return cls(val)
+
 class ReferenceProperty(_m.Property):
-    type = _m.Key
+    type = Ref
 
     def __init__(self, kind, *args, **kwargs):
         self.kind = kind
@@ -66,8 +93,10 @@ class ReferenceProperty(_m.Property):
         super(ReferenceProperty, self).__init__(*args, **kwargs)
 
     def __config__(self, cls, name):
-        super(ReferenceProperty, self).__config__(cls, name)
         self.kind = _model(self.kind)
+        if self.type is Ref:
+            self.type = self.type.derive(_model(self.kind))
+        super(ReferenceProperty, self).__config__(cls, name)
         self._collection_set()
 
     def load(self, obj, val):
@@ -238,8 +267,8 @@ class DirectoryProperty(_m.Property):
         self.type = self.type.derive((str, _model(kind)))
         super(DirectoryProperty, self).__init__(*args, **kwargs)
 
-    def default(self, obj):
-        if callable(self._default):
-            return self._default(obj)
-        return self._default or self.type()
+    def default_value(self, obj):
+        if callable(self.default):
+            return self.default(obj)
+        return self.default or self.type()
 

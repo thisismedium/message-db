@@ -30,15 +30,16 @@ class Property(object):
 
     __metaclass__ = PropertyType
     __abstract__ = True
+    __all__ = ('name', 'type', 'title', 'doc', 'default', 'required')
+
     type = object
 
-    def __init__(self, title=None, default=None, required=False, help=None, valid=None):
-        self.created = time.time()
+    def __init__(self, title=None, default=None, required=False, doc=None):
         self.title = title
         self.required = required
-        self.help = help
-        self.valid = valid
-        self._default = default
+        self.doc = doc
+        self.default = default
+        self._created = time.time()
 
     def __repr__(self):
         if hasattr(self, 'model'):
@@ -49,12 +50,18 @@ class Property(object):
         self.model = model
         self.name = name
 
+    def __dir__(self):
+        return list(self.__all__)
+
+    def __describe__(self, names=None):
+        return ((n, getattr(self, n)) for n in names or self.__all__)
+
     def __get__(self, obj, cls):
         try:
             return self.load(obj, stm.readable(obj)[self.name])
         except KeyError:
             try:
-                return self.default()
+                return self.default_value(obj)
             except stm.NeedsTransaction:
                 raise AttributeError(
                     '%r must be initialized in a transaction.' % self
@@ -63,10 +70,10 @@ class Property(object):
     def __set__(self, obj, val):
         stm.writable(obj)[self.name] = self.dump(obj, self.validate(obj, val))
 
-    def default(self, obj):
-        if callable(self._default):
-            return self._default(obj)
-        return self._default
+    def default_value(self, obj):
+        if callable(self.default):
+            return self.default(obj)
+        return self.default
 
     def validate(self, obj, val):
         if self.required and self.empty(val):
@@ -74,9 +81,6 @@ class Property(object):
 
         if val is not None and not isinstance(val, self.type):
             val = self.adapt(obj, val)
-
-        if self.valid:
-            val = self.valid(val)
 
         return val
 
@@ -115,7 +119,7 @@ def check_reserved_word(name):
     return True
 
 def valid_property(name, prop):
-    return isinstance(prop, Descriptor) and check_reserved_word(name)
+    return isinstance(prop, Property) and check_reserved_word(name)
 
 
 ### Models
@@ -144,6 +148,15 @@ class ModelType(type):
         prop.__config__(cls, name)
         return prop
 
+    def __dir__(cls):
+        return properties(cls).keys()
+
+    def __describe__(cls, names=None):
+        props = properties(cls)
+        if names:
+            ((n, props[n]) for n in names)
+        return props.iteritems()
+
 def allocate(cls, id, state):
     return stm.allocate(stm.new(Key.make(cls.kind, id)), state)
 
@@ -163,7 +176,7 @@ def base_props(bases):
     return reduce(
         merge_unique_prop,
         (p for b in bases
-         if issubclass(b, Described)
+         if isinstance(b, ModelType)
          for p in properties(b).iteritems()),
         {}
     )
@@ -211,7 +224,7 @@ def sorted_props(props):
     return omap(sorted(props.iteritems(), None, item_created))
 
 def item_created((name, prop)):
-    return prop.created
+    return prop._created
 
 @abc.implements(PCursor)
 class Model(object):
@@ -220,7 +233,7 @@ class Model(object):
 
     def __init__(self, **kw):
         for (name, prop) in properties(self).iteritems():
-            value = kw.pop(name) if name in kw else prop.default(self)
+            value = kw.pop(name) if name in kw else prop.default_value(self)
             setattr(self, name, value)
         if kw:
             self.update(kw)
@@ -400,7 +413,7 @@ MODELS = weakref.WeakValueDictionary()
 PROPERTIES = weakref.WeakValueDictionary()
 
 def classify(name, cls):
-    if issubclass(cls, Descriptor):
+    if issubclass(cls, Property):
         return _classify(PROPERTIES, name, cls)
     return _classify(MODELS, name, cls)
 
@@ -414,7 +427,7 @@ def _classify(taxonomy, name, cls):
     return name
 
 def model(name):
-    if isinstance(name, Described):
+    if isinstance(name, ModelType):
         return name
     try:
         return MODELS[name]

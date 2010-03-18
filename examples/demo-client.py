@@ -7,7 +7,7 @@ Example:
 ## In one terminal:
 > python demo-server.py
 ## In another terminal:
-> python demo-client.py '*'
+> python demo-client.py query '*'
 """
 
 import os, sys, xmpp, socket, base64
@@ -18,9 +18,9 @@ def usage():
     print 'usage: %s expression' % sys.argv[0]
     sys.exit(1)
 
-def main(query):
+def main(method, query):
     client = xmpp.Client({
-        'plugins': [(QueryClient, { 'query': query })],
+        'plugins': [(QueryClient, { 'method': method, 'query': query })],
         'username': 'user',
         'password': 'secret',
         'host': 'localhost'
@@ -29,22 +29,22 @@ def main(query):
 
 class QueryClient(xmpp.Plugin):
 
-    def __init__(self, query):
-        self.send(query)
+    def __init__(self, method, query):
+        self.send(method, query)
 
-    def send(self, query):
-        self.iq('get', self.on_reply, self.E.query(
+    def send(self, method, query):
+        self.iq('get', self.on_reply, self.E(
+            method,
             { 'xmlns': 'urn:message' },
             base64.b64encode(query)
         ))
 
     def on_reply(self, iq):
         assert iq.get('type') == 'result'
-        data = base64.b64decode(xml.child(iq, '{urn:message}query/text()'))
-        print 'Got reply:', data
+        print 'Got reply:', base64.b64decode(iq[0].text)
         xmpp.loop().stop()
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 3:
         usage()
-    main(sys.argv[1])
+    main(*sys.argv[1:])
