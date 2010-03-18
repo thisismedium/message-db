@@ -53,7 +53,7 @@ class QueryServer(xmpp.Plugin):
             self.iq('result', iq, self.E.query({
                 'xmlns': 'urn:message',
                 'match': match
-            }, result))
+            }, base64.b64encode(result)))
         except SyntaxError as exc:
             self.error(iq, 'modify', 'undefined-condition', str(exc))
 
@@ -62,7 +62,7 @@ class QueryServer(xmpp.Plugin):
         pass
 
 def dumps(obj):
-    return base64.b64encode(json.dumps(dumps_value(obj)))
+    return json.dumps(dumps_value(obj))
 
 def dumps_value(obj, rec=None):
     if isinstance(obj, (type(None), bool, int, float, basestring)):

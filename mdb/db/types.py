@@ -9,9 +9,9 @@ from md.prelude import *
 from . import models as _m, stm as _stm, api as _api
 
 __all__ = (
-    'String', 'StringProperty', 'Text', 'TextProperty',
-    'ReferenceProperty',
-    'Directory', 'DirectoryProperty'
+    'string', 'StringProperty', 'text', 'TextProperty',
+    'ref', 'ReferenceProperty',
+    'directory', 'DirectoryProperty'
 )
 
 def serialize(cls, dump=None, load=None):
@@ -26,7 +26,7 @@ def serialize(cls, dump=None, load=None):
 ### Atomic Types
 
 @serialize
-class String(unicode):
+class string(unicode):
     """A unicode value."""
 
     @classmethod
@@ -46,18 +46,18 @@ class String(unicode):
         return cls(value)
 
 class StringProperty(_m.Property):
-    type = String
+    type = string
 
 @serialize
-class Text(String):
+class text(string):
     pass
 
 class TextProperty(_m.Property):
-    type = Text
+    type = text
 
 serialize(_m.Key, str, _m.Key)
 
-class Ref(_m.Key):
+class ref(_m.Key):
 
     DERIVATIVES = weakref.WeakValueDictionary()
 
@@ -85,7 +85,7 @@ class Ref(_m.Key):
         return cls(val)
 
 class ReferenceProperty(_m.Property):
-    type = Ref
+    type = ref
 
     def __init__(self, kind, *args, **kwargs):
         self.kind = kind
@@ -94,7 +94,7 @@ class ReferenceProperty(_m.Property):
 
     def __config__(self, cls, name):
         self.kind = _model(self.kind)
-        if self.type is Ref:
+        if self.type is ref:
             self.type = self.type.derive(_model(self.kind))
         super(ReferenceProperty, self).__config__(cls, name)
         self._collection_set()
@@ -126,8 +126,8 @@ def _model(obj):
 
 ### Containers
 
-class Directory(_stm.omap):
-    type = (str, object)
+class directory(_stm.omap):
+    type = (string, object)
 
     INTERNED = weakref.WeakValueDictionary()
 
@@ -149,7 +149,7 @@ class Directory(_stm.omap):
 
     @classmethod
     def __adapt__(cls, val):
-        if (isinstance(val, Directory)
+        if (isinstance(val, directory)
             and issubclass(val.type[0], self.type[0])
             and issubclass(val.type[1], self.type[1])):
             return cls(val)
@@ -171,27 +171,27 @@ class Directory(_stm.omap):
     @classmethod
     def fromkeys(cls, seq, value=None):
         (Key, Value) = self.type
-        return super(Directory).fromkeys(
+        return super(directory).fromkeys(
             (self._key(k, Key) for k in seq),
             self._value(value, Value)
         )
 
     def __setitem__(self, key, val):
         (Key, Value) = self.type
-        super(Directory, self).__setitem__(
+        super(directory, self).__setitem__(
             self._key(key, Key),
             self._value(val, Value)
         )
 
     def setdefault(self, key, val):
         (Key, Value) = self.type
-        return super(Directory, self).setdefault(
+        return super(directory, self).setdefault(
             self._key(key, Key),
             self._value(val, Value)
         )
 
     def update(self, seq=(), **kwargs):
-        super(Directory, self).update(self._icast(chain_items(seq, kwargs)))
+        super(directory, self).update(self._icast(chain_items(seq, kwargs)))
 
     ## Serialize
 
@@ -261,10 +261,10 @@ class RefValues(object):
         return self._deref(self.writable(self).popitem())
 
 class DirectoryProperty(_m.Property):
-    type = Directory
+    type = directory
 
     def __init__(self, kind, *args, **kwargs):
-        self.type = self.type.derive((str, _model(kind)))
+        self.type = self.type.derive((string, _model(kind)))
         super(DirectoryProperty, self).__init__(*args, **kwargs)
 
     def default_value(self, obj):
