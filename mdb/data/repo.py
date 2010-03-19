@@ -11,7 +11,7 @@ from . import store, yaml
 
 __all__ = (
     'RepoError', 'TransactionError', 'TransactionFailed', 'zipper',
-    'repository', 'branch', 'message'
+    'repository', 'branch', 'message', 'Deleted'
 )
 
 class RepoError(store.StoreError):

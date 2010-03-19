@@ -16,6 +16,14 @@ def get(key):
     else:
         return stm.current_journal().mget(_key(k) for k in key)
 
+def _delete(key):
+    if isinstance(key, models.Model):
+        key = key.key
+    if isinstance(key, (basestring, models.Key)):
+        stm.delete(key)
+    else:
+        for k in key: stm.delete(k)
+
 def _key(key):
     if isinstance(key, models.Key):
         return key

@@ -7,6 +7,7 @@ from __future__ import absolute_import
 import threading
 from md import stm as _stm, abc as _abc, collections as _coll
 from md.stm import *
+from md.stm.meronymy import *
 from .. import data as _data
 from . import interfaces as _i
 
@@ -95,7 +96,7 @@ class _journal(object):
         try:
             return self._write_log[cursor]
         except KeyError:
-            state = stm.copy_state(self.original_state(cursor))
+            state = copy_state(self.original_state(cursor))
             self._write_log[cursor] = state
             return state
 
@@ -118,7 +119,7 @@ class _journal(object):
     def changed(self):
         return (
             _stm.change(c, self._read_log[c], v)
-            for (c, v) in self._write_log
+            for (c, v) in self._write_log.entries.values()
         )
 
     ## Dereference keys
@@ -127,17 +128,17 @@ class _journal(object):
         (cursor, _) = self._fetch(key)
         return cursor
 
+    def mget(self, keys):
+        return (c for (c, _) in self._mfetch(keys))
+
     def _fetch(self, key):
         probe = self._read_log.entry(key)
         if probe is not None:
             return probe
-        probe = self.source._fetch(key)
-        if probe.cursor is not None:
-            self._read_log[probe.cursor] = probe.state
+        probe = (cursor, state) = self.source._fetch(key)
+        if cursor is not None:
+            self._read_log[cursor] = state
         return probe
-
-    def mget(self, keys):
-        return (c for (c, _) in self._mfetch(keys))
 
     def _mfetch(self, keys):
         need = []
@@ -211,6 +212,9 @@ class _memory(object):
         (cursor, _) = self._fetch(key)
         return cursor
 
+    def mget(self, keys):
+        return (c for (c, _) in self._mfetch(keys))
+
     def _fetch(self, key):
         probe = self._active.entry(key)
         if probe is not None:
@@ -220,9 +224,6 @@ class _memory(object):
         if state is None:
             return self.NO_ENTRY
         return (self.allocate(new(key), state), state)
-
-    def mget(self, keys):
-        return (c for (c, _) in self._mfetch(keys))
 
     def _mfetch(self, keys):
         keymap = {}
@@ -261,11 +262,22 @@ class _memory(object):
             self._commit(delta)
 
     def _persist(self, delta):
+        result = {}; delay = {}
         for (cursor, state) in delta:
             if isinstance(cursor, _i.PCursor):
                 if state is _stm.Deleted:
                     state = _data.Deleted
-                yield (str(cursor.key), state)
+                result[str(cursor.key)] = state
+            else:
+                ## Check for a persistent holonym.
+                obj = whole(cursor)
+                if isinstance(obj, _i.PCursor):
+                    delay[str(obj.key)] = obj
+        ## Add any holonyms into the result set.
+        for (key, cursor) in delay.iteritems():
+            if key not in result:
+                result[key] = self.readable_state(cursor)
+        return result
 
     def _commit(self, delta):
         for (cursor, state) in delta:

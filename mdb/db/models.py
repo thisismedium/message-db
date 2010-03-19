@@ -58,7 +58,7 @@ class Property(object):
 
     def __get__(self, obj, cls):
         try:
-            return self.load(obj, stm.readable(obj)[self.name])
+            return self.load(obj, stm.partof(obj, stm.readable(obj)[self.name]))
         except KeyError:
             try:
                 return self.default_value(obj)
@@ -90,7 +90,7 @@ class Property(object):
     def adapt(self, obj, val):
         try:
             return adapt(val, self.type)
-        except ValueError:
+        except AdaptationFailure:
             raise ValueError('%r: expected %r, got %r.' % (self, self.type, val))
 
     def load(self, obj, val):
@@ -318,6 +318,7 @@ class Model(object):
     def update(self, seq=(), **kw):
         for (name, value) in chain_items(seq, kw):
             setattr(self, name, value)
+        return self
 
 
 ### Key
@@ -345,6 +346,7 @@ class Key(object):
     INTERNED = weakref.WeakValueDictionary()
 
     def __new__(cls, encoded):
+        encoded = str(encoded)
         try:
             self = cls.INTERNED[encoded]
         except KeyError:
@@ -356,6 +358,12 @@ class Key(object):
 
     def __hash__(self):
         return hash(str(self))
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
 
     def __str__(self):
         if self._encoded is None:
@@ -394,8 +402,8 @@ class Key(object):
 
     @staticmethod
     def _decode(enc):
-        pad = len(enc) % 3
-        enc = str(enc) + '=' * (3 - pad) if pad else enc
+        pad = len(enc) % 4
+        enc = str(enc) + '=' * (4 - pad) if pad else enc
         data = base64.urlsafe_b64decode(enc)
         return data.split('\x00', 1)
 

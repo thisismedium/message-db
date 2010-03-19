@@ -7,7 +7,7 @@ Example:
 ## In one terminal:
 > python demo-server.py
 ## In another terminal:
-> python demo-client.py query '*'
+> python demo-client.py item '*'
 """
 
 import os, sys, xmpp, socket, base64
@@ -32,10 +32,13 @@ class QueryClient(xmpp.Plugin):
     def __init__(self, method, query):
         self.send(method, query)
 
-    def send(self, method, query):
-        self.iq('get', self.on_reply, self.E(
-            method,
-            { 'xmlns': 'urn:message' },
+    def send(self, name, query):
+        type = 'get'
+        if '-' in name:
+            (type, name) = name.split('-')
+        self.iq(type, self.on_reply, self.E(
+            name,
+            { 'xmlns': 'urn:M' },
             base64.b64encode(query)
         ))
 

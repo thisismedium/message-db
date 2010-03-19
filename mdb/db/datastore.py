@@ -12,7 +12,7 @@ from . import models, types, stm, api
 
 __all__ = (
     'Item', 'Folder', 'Page',
-    'root', 'path', 'resolve',
+    'root', 'path', 'resolve', 'add_child', 'remove',
     'setup'
 )
 
@@ -69,6 +69,9 @@ class Folder(Item):
         next(seq, None) # seq begins with item; skip it.
         return seq
 
+    def child(self, name, default=None):
+        return self.contents.get(name, default)
+
     def add(self, item):
         if item.name in self:
             raise ValueError('Child already exists: %r.' % item.name)
@@ -78,8 +81,11 @@ class Folder(Item):
         item.folder = self
         return self
 
-    def child(self, name, default=None):
-        return self.contents.get(name, default)
+    def remove(self, item):
+        if self.child(item.name) == item:
+            del self.contents[item.name]
+            item.folder = None
+        return self
 
 class Page(Item):
     description = types.StringProperty()
@@ -102,22 +108,35 @@ def add_child(folder, child):
     folder.add(child)
     return child
 
+def remove(child):
+    if child == root():
+        raise ValueError('Cannot remove the root item.')
+    folder = child.folder
+    folder.remove(child)
+    api._delete(list(tree.orself(child, tree.descend)))
+    return folder
+
 def walk(item):
     return tree.orself(item, tree.descend)
 
 def path(item):
-    up = (i.name for i in tree.orself(item, tree.ascend))
+    up = (i.name for i in tree.orself(item, tree.ascend) if i.folder)
     return '/%s' % '/'.join(reversed(list(up)))
 
 def resolve(expr, top=None):
+    steps = expr.strip('/')
+    if not steps:
+        return root() if expr.startswith('/') else (top or root())
+
     top = top or root()
-    for name in expr.strip('/').split('/'):
+    for name in steps.split('/'):
         probe = top.child(name)
         if not probe:
             raise ValueError('Bad expr: %r (%r has no child %r).' % (
                 expr, path(top), name
             ))
         top = probe
+
     return top
 
 
