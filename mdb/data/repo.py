@@ -45,6 +45,12 @@ class zipper(object):
     >>> zs = zipper(store.back.memory()).create().open()
     >>> zs
     zipper(...)
+
+    A checkpoint is a way to save data privately; they aren't shared
+    with other zippers.  In addition to being private, they are more
+    lightweight than normal commits because their changesets are
+    simply deltas against the last commit's manifest.
+
     >>> zs.transactionally(zs.checkpoint, a=1, b=2).items()
     tree([('a', 1), ('b', 2)])
     >>> zs.transactionally(zs.checkpoint, a=Deleted, b=3, c=4).items()
@@ -54,8 +60,23 @@ class zipper(object):
     <checkpoint Anonymous <nobody@example.net> ...>
     <checkpoint Anonymous <nobody@example.net> ...>
 
+    To replace the top checkpoint without leaving history, use the
+    variant zipper.amend().
+
+    >>> zs.transactionally(zs.amend, b=-3).items()
+    tree([('b', -3), ('c', 4)])
+    >>> print '\\n'.join(repr(c) for c in checkpoints(zs))
+    <checkpoint Anonymous <nobody@example.net> ...>
+    <checkpoint Anonymous <nobody@example.net> ...>
+    <checkpoint Anonymous <nobody@example.net> ...>
+
+    Zippers may be committed.  All changes accumulated in checkpoints
+    are merged into the manifest from the last commit and a new commit
+    is created.  Commits are shared with other zippers.  Once a commit
+    is made, it cannot be undone.
+
     >>> zs.transactionally(zs.commit, d=5).items()
-    tree([('b', 3), ('c', 4), ('d', 5)])
+    tree([('b', -3), ('c', 4), ('d', 5)])
     >>> print '\\n'.join(repr(c) for c in commits(zs))
     <commit Anonymous <nobody@example.net> ...>
     <commit Anonymous <nobody@example.net> ...>
@@ -167,6 +188,11 @@ class zipper(object):
             return True
         except store.NotStored:
             raise TransactionFailed('Try again.')
+
+    def amend(self, seq=(), **kw):
+        refs = mref(self, chain_items(seq, kw))
+        changes = make_changeset(self._manifest, self._changes, refs)
+        return amend_checkpoint(self, changes)
 
     def checkpoint(self, seq=(), **kw):
         refs = mref(self, chain_items(seq, kw))
@@ -691,6 +717,13 @@ def next_checkpoint(zs, changes):
     if not changes:
         return check
     return make_checkpoint(zs, changes, check.commits, check)
+
+@zop
+def amend_checkpoint(zs, changes):
+    check = last_checkpoint(zs)
+    if not changes:
+        return check
+    return make_checkpoint(zs, changes, check.commits, *check.prev)
 
 @zop
 def next_commit(zs, changes):
