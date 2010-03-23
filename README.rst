@@ -2,13 +2,16 @@
  Message Database
 ==================
 
-Introduction
-------------
-
-The Message Database, mdb, is a versioned object datastore.
+The Message Database is a versioned datastore for structured content.
 
 Installation
 ------------
+
+The easiest way to install this project is to download `Message`_ and
+use its install scripts.  To install Message DB manually, follow these
+steps.
+
+.. _`Message`: http://github.com/thisismedium/message
 
 First, install some dependencies::
 
@@ -44,23 +47,9 @@ to this project::
   python setup.py build
   sudo python setup.py develop
 
-Finally, install the Google AppEngine SDK and link it into your
-``mdb`` directory::
-
-  cd ..
-  curl -O http://googleappengine.googlecode.com/files/google_appengine_1.3.1.zip
-  unzip google_appengine_1.3.1.zip; rm google_appengine_1.3.1.zip
-  cd mdb
-  ln -s ../google_appengine/google
-
 Verify everything worked by running a test query::
 
   python examples/demo-query.py '*'
-
-The AppEngine SDK uses some deprecated Python packages, so you may see
-DeprecationWarnings.  To ignore the warnings, do this:
-
-  python -W ignore::DeprecationWarning examples/demo-query.py '*'
 
 BOSH
 ----
