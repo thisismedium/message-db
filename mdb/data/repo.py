@@ -4,10 +4,10 @@
 """repo -- versioned key/value datastore"""
 
 from __future__ import absolute_import
-import datetime, weakref, time
+import os, datetime, weakref, time
 from md.prelude import *
 from md import abc, fluid
-from . import store, yaml
+from . import store, avro
 
 __all__ = (
     'RepoError', 'TransactionError', 'TransactionFailed', 'zipper',
@@ -37,14 +37,14 @@ class zipper(object):
     manifest.  A checkpoint encapsulates a delta against a
     commit/manifest.
 
+    >>> zs = zipper(store.back.memory()).create().open()
+    >>> zs
+    zipper(...)
+
     Checkpoints are private to the branch and may contain
     "intermediate" references such as Deleted sentinal or Conflict
     markers.  Commits are public; they may be cloned into new branches
     or merged into other branches.
-
-    >>> zs = zipper(store.back.memory()).create().open()
-    >>> zs
-    zipper(...)
 
     A checkpoint is a way to save data privately; they aren't shared
     with other zippers.  In addition to being private, they are more
@@ -86,7 +86,7 @@ class zipper(object):
 
     HEAD = 'HEAD'
 
-    def __init__(self, state, objects=None, marshall=yaml, author=None):
+    def __init__(self, state, objects=None, marshall=avro, author=None):
         self._state = store.back.prefixed(state, '', marshall)
         self._objects = store.back.static(state, marshall, 'objects/')
         self.author = author or anonymous
@@ -254,8 +254,8 @@ class repository(zipper):
     >>> print '\\n'.join(str(c) for c in commits(r))
     <commit Anonymous <nobody@example.net> ...: "Add branch 'foo'.">
     <commit Anonymous <nobody@example.net> ...>
-    >>> b.transactionally(b.checkpoint, a='a-value').items()
-    tree([('a', 'a-value')])
+    >>> b.transactionally(b.checkpoint, a=u'a-value').items()
+    tree([('a', u'a-value')])
     """
 
     def branch(self, name):
@@ -273,7 +273,7 @@ class repository(zipper):
         return self.transactionally(self._remove, branch)
 
     def _create(self):
-        return init_commit(self, branches=tree())
+        return init_commit(self, branches=BranchMap())
 
     def _branches(self):
         return self.get('branches')
@@ -296,7 +296,7 @@ class repository(zipper):
         return name
 
     def _config(self, branch):
-        return tree(owner=self.author(), config=tree())
+        return Branch(self.author(), BranchConfig())
 
 class branch(zipper):
     """A branch keeps state in a private keyspace and uses a common
@@ -317,76 +317,19 @@ class branch(zipper):
 
 ### Marshalling
 
-BUILTIN = '.'
+## The schema for the avro stuctures used in this file are defined
+## externally for now.  See schema.avro in this folder.
+with closing(open(os.path.join(os.path.dirname(__file__), 'schema.avro'))) as port:
+    avro.schema.load(port)
 
-def represent(*args, **kw):
-    return yaml.represent(*args, **kw)
+class Branch(avro.structure('M.branch')):
+    """Branch configuration is stored in the repository."""
 
-def construct(*args, **kw):
-    return yaml.construct(*args, **kw)
+BranchMap = avro.mapping(Branch)
+BranchConfig = avro.mapping(avro.string)
 
-def constant(name):
-    """Declare a constant and register it for marshalling in the
-    "built-in" namespace.
-
-    >>> foo = constant('foo')
-    >>> data = yaml.dumps(foo); data
-    "!!.foo ''\\n"
-    >>> yaml.loads(data)
-    <foo>
-    """
-
-    value = sentinal('<%s>' % name)
-
-    @represent(name, type(value), ns=BUILTIN)
-    def repr_const(_):
-        return ''
-
-    @construct(name, ns=BUILTIN)
-    def make_const(_):
-        return value
-
-    return value
-
-class StructureType(StructType):
-    def __new__(mcls, name, bases, attr):
-        cls = StructType.__new__(mcls, name, bases, attr)
-
-        @represent(name, cls, ns=BUILTIN)
-        def repr(value):
-            return list(value)
-
-        @construct(name, ns=BUILTIN)
-        def make(value):
-            return cls(*value)
-
-        return cls
-
-def structure(name, *args, **kw):
-    """Marshall a named tuple in the "built-in" namespace.
-
-    >>> class foo(structure('foo', 'a b')):
-    ...     pass
-    >>> data = yaml.dumps(foo(1, 2)); data
-    '!!.foo [1, 2]\\n'
-    >>> yaml.loads(data)
-    foo(a=1, b=2)
-    """
-
-    kw.setdefault('metaclass', StructureType)
-    return struct(name, *args, **kw)
 
 ### History
-
-## A manifest is a mapping of <logical-key, static-reference> items.
-## The logical-key is a key in the mutable keyspace.  A
-## static-reference is some object that refers to an object in the
-## static (write-only) keyspace.
-manifest = tree
-
-## A changeset is like a manifest, but the value may indicate a
-## deleted or conflicted state.
-changeset = tree
 
 class Reference(object):
     __metaclass__ = abc.ABCMeta
@@ -395,7 +338,7 @@ class Static(Reference):
     pass
 
 @abc.implements(Static)
-class sref(structure('_sref', 'address', weak=True)):
+class sref(avro.structure('M.sref', weak=True)):
     """A reference to a value in the static keyspace."""
 
     INTERNED = weakref.WeakValueDictionary()
@@ -403,14 +346,18 @@ class sref(structure('_sref', 'address', weak=True)):
     def __new__(cls, address):
         obj = cls.INTERNED.get(address)
         if obj is None:
-            value = cls.__bases__[0].__new__(cls, address)
+            value = cls.__bases__[0].__new__(cls)
             obj = cls.INTERNED.setdefault(address, value)
         return obj
+
+    @classmethod
+    def __restore__(cls, state):
+        return cls(state['address'])
 
     def __hash__(self):
         return hash(self.address)
 
-class commit(structure('commit', 'author when message changes prev')):
+class commit(avro.structure('M.commit')):
     """A commit history is a linked list of commits.  An individual
     commit records a manifest (i.e. changes) that keys in a logical
     keyspace to static identifiers in a write-once keyspace."""
@@ -427,7 +374,7 @@ class commit(structure('commit', 'author when message changes prev')):
     def date(self):
         return datetime.fromtimestamp(self.when)
 
-class checkpoint(structure('checkpoint', 'author when message changes commits prev')):
+class checkpoint(avro.structure('M.checkpoint')):
     """A checkpoint is a partial manifest that represents changes
     since the last commit.  The changeset may contain non-static
     references such as Deleted or Conflict sentinals.  A checkpoint
@@ -458,14 +405,23 @@ def now():
     return time.time()
 
 ## The commit message is dynamically parameterized.
-MESSAGE = fluid.cell(None, type=fluid.private)
+MESSAGE = fluid.cell('', type=fluid.private)
 message = fluid.accessor(MESSAGE)
+
+## A manifest is a mapping of <logical-key, static-reference> items.
+## The logical-key is a key in the mutable keyspace.  A
+## static-reference is some object that refers to an object in the
+## static (write-only) keyspace.
+manifest = avro.mapping(sref)
+
+## A changeset is like a manifest, but the value may indicate a
+## deleted or conflicted state.
+changeset = avro.mapping(sref)
 
 
 ### Working Manifest
 
-Deleted = constant('deleted')
-abc.implements(Reference)(type(Deleted))
+Deleted = sref('deleted')
 Done = sentinal('<done>')
 
 @abc.implements(Tree)

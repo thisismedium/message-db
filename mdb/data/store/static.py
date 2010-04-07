@@ -92,7 +92,7 @@ class static(object):
                         "Inconsistent static identity %r, expected %r." % (
                             probe, address
                     ))
-            value = self._marshall.loads(value)
+            value = self._marshall.loads_binary(value)
         return self._cached(address, value)
 
     def _cached(self, address, value):
@@ -119,7 +119,7 @@ class static(object):
         return ((a, v) for (v, (a, _)) in data)
 
     def _dump(self, address, value):
-        data = self._marshall.dumps(value)
+        data = self._marshall.dumps_binary(value)
         static = self._digest(data)
         if address and address != static:
             raise NotStored(

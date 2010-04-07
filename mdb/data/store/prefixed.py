@@ -84,7 +84,7 @@ class prefixed(object):
         return self._prefix + key
 
     def _load(self, value):
-        return value if value is Undefined else self._marshall.loads(value)
+        return value if value is Undefined else self._marshall.loads_binary(value)
 
     def _dump(self, value):
-        return self._marshall.dumps(value)
+        return self._marshall.dumps_binary(value)

@@ -1,0 +1,41 @@
+{
+    "type": "record",
+    "name": "M.branch",
+    "fields": [
+        { "type": "string", "name": "author" },
+        { "type": { "type": "map", "values": "string" }, "name": "config" }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "M.sref",
+    "fields": [
+        { "type": "string", "name": "address" }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "M.commit",
+    "fields": [
+        { "type": "string", "name": "author" },
+        { "type": "float", "name": "when" },
+        { "type": "string", "name": "message" },
+        { "type": "M.sref", "name": "changes" },
+        { "type": { "type": "array", "items": "M.sref" }, "name": "prev" }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "M.checkpoint",
+    "fields": [
+        { "type": "string", "name": "author" },
+        { "type": "float", "name": "when" },
+        { "type": "string", "name": "message" },
+        { "type": "M.sref", "name": "changes" },
+        { "type": { "type": "array", "items": "M.sref" }, "name": "commits" },
+        { "type": { "type": "array", "items": "M.sref" }, "name": "prev" }
+    ]
+}

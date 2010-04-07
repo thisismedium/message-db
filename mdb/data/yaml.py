@@ -8,7 +8,8 @@ import yaml
 from md.prelude import *
 
 __all__ = (
-    'load', 'loads', 'dump', 'dumps',
+    'load', 'load_binary', 'loads', 'loads_binary',
+    'dump', 'dump_binary', 'dumps', 'dumps_binary',
     'pretty', 'represent', 'construct'
 )
 
@@ -52,6 +53,12 @@ def dumps(data):
     """
 
     return dump(data, None)
+
+## Punt!
+load_binary = load
+loads_binary = loads
+dump_binary = dump
+dumps_binary = dumps
 
 def pretty(data, stream=None):
     """Serialize data to un-flowed YAML.  Write the YAML to stream;
