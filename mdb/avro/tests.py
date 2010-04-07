@@ -1,3 +1,8 @@
+## Copyright (c) 2010, Coptix, Inc.  All rights reserved.
+## See the LICENSE file for license terms and warranty disclaimer.
+
+"""tests -- unit tests"""
+
 from __future__ import absolute_import
 import unittest, cStringIO, weakref
 from md.prelude import *
@@ -62,6 +67,10 @@ class TestExternalSchema(unittest.TestCase):
         schema.load(SCHEMA)
         self.assertEqual(types.name(schema.get('Test.Link')), 'Test.Link')
 
+## A structure is a simple Python type for an Avro record.  Make sure
+## they are well-behaved Python types and marshall correctly.  See
+## record.py
+
 class TestStructure(unittest.TestCase):
 
     def setUp(self):
@@ -113,19 +122,27 @@ class TestStructure(unittest.TestCase):
         obj = self.Pointer("example")
         self.assertEqual(weakref.ref(obj)(), obj)
 
+## Primitive types are numbers, strings, boolean, etc.  Complex,
+## non-named types are maps, arrays, unions, etc.
+
 class TestTypes(unittest.TestCase):
 
     def setUp(self):
         schema.clear()
         schema.load(SCHEMA)
 
+        ## Add a record into the mix.
         class Pointer(structure('Test.Pointer')):
             pass
 
         self.Pointer = Pointer
+
+        ## Arrays an maps over primitive and named types.
         self.ITree = mapping(int)
         self.PTree = mapping(Pointer)
         self.IArray = array(int)
+
+        ## A 3-level deep non-named Python type.
         self.PArray = array(self.PTree)
 
     def test_itree(self):
