@@ -1,0 +1,43 @@
+
+{ "type": "fixed", "name": "M.uuid", "size": 16 }
+
+{
+    "type": "record",
+    "name": "M.key",
+    "fields": [
+        { "name": "kind", "type": "string" },
+        { "name": "id", "type": [ "M.uuid", "string" ] }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "M.Item",
+    "fields": [
+        { "name": "name", "type": "string" },
+        { "name": "title", "type": "string" },
+        { "name": "folder", "type": "M.key" }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "M.Folder",
+    "base": "M.Item",
+    "fields": [
+        { "name": "default_name", "type": "string" },
+        { "name": "contents", "type": { "type": "map", "values": "M.key" } }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "M.Site",
+    "base": "M.Folder"
+}
+
+{
+    "type": "record",
+    "name": "M.Subdomain",
+    "base": "M.Site"
+}
