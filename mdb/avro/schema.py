@@ -42,6 +42,10 @@ def require(*paths, **kw):
         require('schema.avro')
     """
 
+    ## Expect that require() is used in the top-level; use stack frame
+    ## introspection to find the file name of the calling source file.
+    ## If require() is wrapped up by another library method, use depth
+    ## > 1!
     depth = kw.pop('depth', 1)
     context = sys._getframe(depth).f_globals.get('__file__')
     if context is None:
