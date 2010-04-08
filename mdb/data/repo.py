@@ -317,35 +317,48 @@ class branch(zipper):
 
 ### Marshalling
 
-## The schema for the avro stuctures used in this file are defined
-## externally for now.  See schema.avro in this folder.
-avro.require('schema.avro')
+## The schemas that define repository-level data structures are
+## declare externally in repo.json.  Each schema as an
+## avro.structure() defined for it below.
+
+avro.require('repo.json')
+
+## Repositories manage multiple branches over a common static space.
+## Each Branch record describes the branch's owner and configuration
+## information.
 
 class Branch(avro.structure('M.branch')):
     """Branch configuration is stored in the repository."""
 
 BranchMap = avro.mapping(Branch)
+
 BranchConfig = avro.mapping(avro.string)
 
-
-### History
+## The main purpose of a zipper is to make a "logical" key/value space
+## over a shared "static" space.  It does this by keeping a mapping of
+## <logical-key, static-reference> items.
 
 class Reference(object):
+    """A Reference is an object that has an address (i.e. key)."""
+
     __metaclass__ = abc.ABCMeta
 
 class Static(Reference):
-    pass
+    """A Static reference is an address in the static space."""
 
 @abc.implements(Static)
 class sref(avro.structure('M.sref', weak=True)):
     """A reference to a value in the static keyspace."""
+
+    ## Reference objects are immutable and common.  Intern them to
+    ## make object allocation less frequent.
 
     INTERNED = weakref.WeakValueDictionary()
 
     def __new__(cls, address):
         obj = cls.INTERNED.get(address)
         if obj is None:
-            value = cls.__bases__[0].__new__(cls)
+            value = base(sref).__new__(cls)
             obj = cls.INTERNED.setdefault(address, value)
         return obj
 
@@ -355,6 +368,10 @@ class sref(avro.structure('M.sref', weak=True)):
 
     def __hash__(self):
         return hash(self.address)
+
+## A zipper also keeps a history of changes to the logical key/value
+## space.  The history is implemented as a linked list of commit
+## and checkpoint records.
 
 class commit(avro.structure('M.commit')):
     """A commit history is a linked list of commits.  An individual
@@ -391,6 +408,9 @@ class checkpoint(avro.structure('M.checkpoint')):
     def date(self):
         return datetime.fromtimestamp(self.when)
 
+## Commits and checkpoints track who made a change, when it happened,
+## and why it happened.
+
 def anonymous():
     """zippers optionally accept a procedure that returns the email
     address of the current user.  This is the default."""
@@ -404,23 +424,31 @@ def now():
     return time.time()
 
 ## The commit message is dynamically parameterized.
+
 MESSAGE = fluid.cell('', type=fluid.private)
+
 message = fluid.accessor(MESSAGE)
 
-## A manifest is a mapping of <logical-key, static-reference> items.
-## The logical-key is a key in the mutable keyspace.  A
-## static-reference is some object that refers to an object in the
-## static (write-only) keyspace.
+## To maintain the logical key/value space, commits use manifests and
+## checkpoints use changesets.  A manifest is a complete snapshot of
+## the space; a changeset is a delta.
+
 manifest = avro.mapping(sref)
 
-## A changeset is like a manifest, but the value may indicate a
-## deleted or conflicted state.
 changeset = avro.mapping(sref)
+
+## Since a changeset is a delta against a manifest, the sentinal
+## Deleted is used to shadow an item that has been removed.
+
+Deleted = sref('deleted')
 
 
 ### Working Manifest
 
-Deleted = sref('deleted')
+## Zippers track changes by shadowing the last manifest with a
+## changeset.  A working tree implements a partial Mapping interface
+## by "stacking" changes on a manifest.
+
 Done = sentinal('<done>')
 
 @abc.implements(Tree)
@@ -533,16 +561,25 @@ def tree_merge(mine, yours):
 
 ### Operations
 
+## These zipper operations are implemented as procedures in stead of
+## methods to emphasize the fact that their behavior is independent of
+## a zipper's implementation.  Most operations aren't public.
+
 def zop(proc):
+    """A "zop" is a zipper operation."""
+
     if not __debug__:
         return proc
+
     @wraps(proc)
     def internal(zs, *args, **kwargs):
         assert zs.is_open(), 'Not open: %r.' % zs
         return proc(zs, *args, **kwargs)
+
     return internal
 
-## Repository Information
+## History and state information can be retrieved from a zipper by
+## traversing the linked list of checkpoints and commits.
 
 @zop
 def last_checkpoint(zs):
@@ -595,7 +632,10 @@ def ancestors(zs, refs):
             yield (ref, commit)
             visited.add(ref.address)
 
-## Repository Manipulation
+## When the logical keyspace is changed, objects are put() into the
+## static space.  When this happens, the serialized object is hashed
+## to make a static key.  These "ref" procedures take values or
+## key/value pairs and return sref() objects for the values.
 
 def ref(zs, obj):
     return obj if isinstance(obj, Reference) else refput(zs, obj)
@@ -617,6 +657,9 @@ def mref(zs, pairs):
 
 def refput(zs, obj):
     return zs.put(obj)[0]
+
+## These procedures are shortcuts for creating commits and
+## checkpoints.
 
 def make_checkpoint(zs, changes, commits, *prev):
     return checkpoint(
@@ -684,3 +727,4 @@ def amend_checkpoint(zs, changes):
 def next_commit(zs, changes):
     check = last_checkpoint(zs)
     return make_commit(zs, changes, *check.commits)
+
