@@ -362,6 +362,12 @@ class sref(avro.structure('M.sref', weak=True)):
             obj = cls.INTERNED.setdefault(address, value)
         return obj
 
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
     @classmethod
     def __restore__(cls, state):
         return cls(state['address'])
