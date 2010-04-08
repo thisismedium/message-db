@@ -112,12 +112,8 @@ class Key(avro.structure('M.key', weak=True)):
     def __adapt__(cls, obj):
         if isinstance(obj, basestring):
             return cls(obj)
-        return super(Key).__adapt__(obj)
-
-    @classmethod
-    def __restore__(cls, state):
-        obj = super(Key).__restore__(state)
-        return cls.INTERNED.setdefault(str(obj), obj)
+        obj = super(Key).__adapt__(obj)
+        return obj and obj._intern()
 
     ## Creating a Key directly is unusual, so make() is a second-class
     ## constructor
@@ -127,8 +123,11 @@ class Key(avro.structure('M.key', weak=True)):
         self = object.__new__(cls)
         self.kind = avro.string(kind)
         self.id = avro.string(id) if id else _uuid(uuid.uuid4().bytes)
+        return self._intern()
+
+    def _intern(self):
         self._encoded = None
-        return cls.INTERNED.setdefault(str(self), self)
+        return self.INTERNED.setdefault(str(self), self)
 
     ## Use a base64 encoded binary Avro value as the opaque
     ## representation.
