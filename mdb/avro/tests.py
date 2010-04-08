@@ -8,12 +8,13 @@ import unittest, cStringIO, weakref
 from md.prelude import *
 from . import *
 
-# Schema can be declared externally in a JSON format.  This example
-# shows two "record" schemas.  A record has a name and a list of
-# fields.  The Avro specification has more details about how to write
-# schema.
+# Schema can be declared externally in a JSON format.  Fixed data have
+# exact lengths.  A record has a name and a list of fields.  The Avro
+# specification has more details about how to write schema.
 
 SCHEMA = """
+{ "type": "fixed", "name": "Test.uuid", "size": 16 }
+
 {
     "type": "record",
     "name": "Test.Pointer",
@@ -44,11 +45,11 @@ class TestExternalSchema(unittest.TestCase):
     def test_load(self):
         loaded = schema.load(SCHEMA)
         self.assertEqual([s.fullname for s in loaded],
-                         ['Test.Pointer', 'Test.Link'])
+                         ['Test.uuid', 'Test.Pointer', 'Test.Link'])
 
     def test_get(self):
         schema.load(SCHEMA)
-        self.assertEqual(str(schema.get('Test.Pointer')), '{"type": "record", "namespace": "Test", "name": "Pointer", "fields": [{"type": "string", "name": "address"}]}')
+        self.assertEqual(str(types.get_schema('Test.Pointer')), '{"type": "record", "namespace": "Test", "name": "Pointer", "fields": [{"type": "string", "name": "address"}]}')
 
     def test_declare(self):
         item = schema.declare(dict(
@@ -60,12 +61,13 @@ class TestExternalSchema(unittest.TestCase):
             ]
         ))
 
-        self.assertEqual(item, schema.get('Test.Item'))
+        self.assertEqual(item, types.get_schema('Test.Item'))
         self.assertEqual(str(item), '{"type": "record", "namespace": "Test", "name": "Item", "fields": [{"type": "string", "name": "title"}, {"type": "string", "name": "content"}]}')
 
     def test_name(self):
         schema.load(SCHEMA)
-        self.assertEqual(types.name(schema.get('Test.Link')), 'Test.Link')
+        self.assertEqual(type_name(types.get_schema('Test.Link')),
+                         'Test.Link')
 
 ## A structure is a simple Python type for an Avro record.  Make sure
 ## they are well-behaved Python types and marshall correctly.  See
@@ -131,6 +133,11 @@ class TestTypes(unittest.TestCase):
         schema.clear()
         schema.load(SCHEMA)
 
+        class uuid(fixed('Test.uuid')):
+            pass
+
+        self.uuid = uuid
+
         ## Add a record into the mix.
         class Pointer(structure('Test.Pointer')):
             pass
@@ -144,6 +151,11 @@ class TestTypes(unittest.TestCase):
 
         ## A 3-level deep non-named Python type.
         self.PArray = array(self.PTree)
+
+    def test_uuid(self):
+        value = '\xddm\x92\xa1\xcfwE>\xa4\x18\x01\x18uw\xf2\xaf'
+        return self.expect(self.uuid(value),
+                           '\x02\x00\x12Test.uuid' + value)
 
     def test_itree(self):
         return self.expect(self.ITree(a=1, b=2),

@@ -7,7 +7,7 @@ from __future__ import absolute_import
 import copy
 from md.prelude import *
 from md import collections as coll
-from . import marshall, types, schema
+from . import marshall, types
 
 __all__ = ('structure', 'Structure')
 
@@ -48,7 +48,7 @@ class RecordType(type):
 
     @classmethod
     def use_schema(mcls, attr):
-        obj = attr['__schema__'] = schema.get(attr['__kind__'])
+        obj = attr['__schema__'] = types.get_schema(attr['__kind__'])
         attr.setdefault('__doc__', obj.props.get('doc', ''))
         attr['__slots__'] += tuple(f.name for f in obj.fields)
 
@@ -102,7 +102,7 @@ class Structure(object):
         obj = cls.__new__(cls)
         for field in cls.__schema__.fields:
             name = field.name
-            cls = types.get(types.name(field))
+            cls = types.get_type(types.type_name(field))
             setattr(obj, name, types.cast(state[name], cls))
         return obj
 

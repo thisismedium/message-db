@@ -29,7 +29,7 @@ def load(data):
 
     result = []
     for val in scan(make_buffer(data)):
-        schema = LOADED[types.name(schema)] = declare(val)
+        schema = LOADED[types.type_name(schema)] = declare(val)
         result.append(schema)
     return result
 
@@ -80,20 +80,10 @@ def declare(definition):
     except _s.SchemaParseException as exc:
         raise SyntaxError('%s while declaring %r.' % (exc, definition))
 
-    key = types.name(schema)
+    key = types.type_name(schema)
     if types.SCHEMATA.setdefault(key, schema) is not schema:
         raise TypeError('Schema %r has already been declared.' % key)
     return schema
-
-## Once a Schema is loaded, it's sometimes necessary to find it by
-## name.  Often, types.get() is better since it returns the Python
-## type associated with a schema name rather than a Schema object.
-
-def get(name):
-    probe = types.SCHEMATA.get(name)
-    if probe is None:
-        raise NameError('Undefined schema: %r.' % name)
-    return probe
 
 ## The clear() method is here to allow unit tests to reset the global
 ## environment between test cases.

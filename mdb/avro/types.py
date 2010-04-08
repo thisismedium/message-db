@@ -9,8 +9,9 @@ from md.prelude import *
 from avro import schema as _s
 
 __all__ = (
-    'cast',
+    'cast', 'get_type', 'type_name',
     'null', 'string', 'boolean', 'bytes', 'int', 'long', 'float', 'double',
+    'fixed',
     'mapping', 'array'
 )
 
@@ -29,12 +30,12 @@ cast = adapt
 def declare(type):
     """Add a new type to the global type namespace."""
 
-    key = name(type)
+    key = type_name(type)
     if TYPES.setdefault(key, type) is not type:
         raise TypeError('Type %r has already been declared.' % key)
     return type
 
-def get(name):
+def get_type(name):
     """Get a type by name."""
 
     probe = TYPES.get(name)
@@ -42,7 +43,7 @@ def get(name):
         raise NameError('Undefiend type: %r.' % name)
     return probe
 
-def name(type):
+def type_name(type):
     """Get a type's name."""
 
     if type is None:
@@ -70,7 +71,7 @@ def name(type):
 def from_schema(schema):
     """Find a Python type for an Avro schema object."""
 
-    return get(name(schema))
+    return get_type(type_name(schema))
 
 def to_schema(cls):
     """Find an Avro schema object using a Python type."""
@@ -84,6 +85,16 @@ def to_schema(cls):
         if probe is None:
             raise TypeError('Cannot convert %r to schema.' % cls)
         return _s.PrimitiveSchema(probe)
+
+## Once a Schema is loaded, it's sometimes necessary to find it by
+## name.  Often, get_type() is better since it returns the Python type
+## associated with a schema name rather than a Schema object.
+
+def get_schema(name):
+    probe = SCHEMATA.get(name)
+    if probe is None:
+        raise NameError('Undefined schema: %r.' % name)
+    return probe
 
 
 ### Primitive Types
@@ -99,6 +110,7 @@ long = long
 float = float
 
 class string(unicode):
+    __slots__ = ()
 
     @classmethod
     def __adapt__(cls, val):
@@ -109,10 +121,52 @@ class string(unicode):
         return cls(val)
 
 class bytes(str):
-    pass
+    __slots__ = ()
 
 class double(float):
-    pass
+    __slots__ = ()
+
+
+### Fixed
+
+## Fixed schema are named types with a specific length.
+
+def fixed(name):
+    """Make a fixed base class for an externally defined schema."""
+
+    return type(name, (Fixed, ), {
+        '__kind__': name,
+        '__abstract__': True
+    })
+
+class FixedType(type):
+
+    def __new__(mcls, name, bases, attr):
+        abstract = attr.setdefault('__abstract__', False)
+
+        if '__kind__' in attr:
+            mcls.use_schema(attr)
+
+        cls = type.__new__(mcls, name, bases, attr)
+
+        if not abstract:
+            declare(cls)
+
+        return cls
+
+    @classmethod
+    def use_schema(mcls, attr):
+        obj = attr['__schema__'] = get_schema(attr['__kind__'])
+        attr.setdefault('d__doc__', obj.props.get('doc', ''))
+
+class Fixed(str):
+    __abstract__ = True
+    __metaclass__ = FixedType
+
+    @classmethod
+    def __adapt__(cls, value):
+        if isinstance(value, str):
+            return cls(value)
 
 
 ### Complex Types
@@ -122,7 +176,7 @@ class double(float):
 ## types and to box serialized data.
 
 def complex_name(kind, value):
-    return '%s<%s>' % (kind, name(value))
+    return '%s<%s>' % (kind, type_name(value))
 
 ## The keys for mapping types must be strings.  A tree is used as a
 ## base type to ensure the keys are kept in a consistent order.  This
@@ -136,7 +190,7 @@ Mapping = tree
 def mapping(values):
     kind = complex_name('map', values)
     try:
-        return get(kind)
+        return get_type(kind)
     except NameError:
         return declare(type(kind, (Mapping, ), {
             'type': values,
@@ -163,7 +217,7 @@ class Array(list):
 def array(items):
     kind = complex_name('array', items)
     try:
-        return get(kind)
+        return get_type(kind)
     except NameError:
         return declare(type(kind, (Array, ), {
             'type': items,
@@ -197,17 +251,17 @@ BUILTIN = {
 
 PRIMITIVE = update({ unicode: 'string' }, BUILTIN)
 
-## The SCHEMATA mapping tracks each schema by name.  This is
-## maintained separately from TYPES because the BUILTIN type mapping
-## confuses Avro.  See schema.get().
-
-SCHEMATA = weakref.WeakValueDictionary()
-
 ## The TYPES mapping is a global registry that tracks Python types by
-## name.  See get() above.  The clear() method is used to reset the
-## registry; this is helpful for unit tests.
+## name.  See get_type() above.  The clear() method is used to reset
+## the registry; this is helpful for unit tests.
 
 TYPES = weakref.WeakValueDictionary()
+
+## The SCHEMATA mapping tracks each schema by name.  This is
+## maintained separately from TYPES because the BUILTIN type mapping
+## confuses Avro.  See get_schema() above.
+
+SCHEMATA = weakref.WeakValueDictionary()
 
 def clear():
     """Reset the global type namespace."""

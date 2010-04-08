@@ -49,10 +49,10 @@ BINARY_CODEC = { 'null': 0 }
 ## find an object's type tag.
 
 def box_type(obj):
-    return types.name(type(obj))
+    return types.type_name(type(obj))
 
 def unbox_type(name):
-    return types.get(name)
+    return types.get_type(name)
 
 ## The null codec does nothing to the serialized data.  The compress
 ## codec isn't implemented yet.
@@ -179,7 +179,7 @@ class DatumReader(io.DatumReader):
             raise _s.AvroException('Unknown type: %r.' % writers_schema.type)
 
     def read_record(self, writers_schema, readers_schema, decoder):
-        cls = types.get(types.name(writers_schema))
+        cls = types.get_type(types.type_name(writers_schema))
         val = super(DatumReader, self).read_record(writers_schema, readers_schema, decoder)
         return types.cast(val, cls)
 
