@@ -319,8 +319,7 @@ class branch(zipper):
 
 ## The schema for the avro stuctures used in this file are defined
 ## externally for now.  See schema.avro in this folder.
-with closing(open(os.path.join(os.path.dirname(__file__), 'schema.avro'))) as port:
-    avro.schema.load(port)
+avro.require('schema.avro')
 
 class Branch(avro.structure('M.branch')):
     """Branch configuration is stored in the repository."""

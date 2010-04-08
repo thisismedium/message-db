@@ -4,17 +4,17 @@
 """schema -- load and declare Avro schemata"""
 
 from __future__ import absolute_import
-import weakref, json
+import os, sys, weakref, json
 from md.prelude import *
 from avro import schema as _s
 from . import types
 
-__all__ = ('load', )
+__all__ = ('load', 'require')
 
 def load(data):
-    """Load schema(s) declared externally.  The data may be a string
-    or a file-like object; more than one schema may be declared in a
-    data source.  A list of avro Schema objects is returned.
+    """Load schema(s) declared in a JSON format.  The data may be a
+    string or a file-like object; more than one schema may be declared
+    in a data source.  A list of avro Schema objects is returned.
 
     >>> load('''{
     ...     "type": "record",
@@ -32,6 +32,28 @@ def load(data):
         schema = LOADED[types.name(schema)] = declare(val)
         result.append(schema)
     return result
+
+def require(*paths, **kw):
+    """Load schema declared in an external file.
+
+    For example, this will load the schema declared in "schema.avro"
+    from the same folder the source file is located in.
+
+        require('schema.avro')
+    """
+
+    depth = kw.pop('depth', 1)
+    context = sys._getframe(depth).f_globals.get('__file__')
+    if context is None:
+        raise ValueError('No __file__ in frame %d.' % depth)
+
+    base = os.path.dirname(context)
+    for path in paths:
+        try:
+            with closing(open(os.path.join(base, path))) as port:
+                load(port)
+        except IOError as exc:
+            raise NameError('require(%r) failed: %s' % (path, exc))
 
 
 ### Private
