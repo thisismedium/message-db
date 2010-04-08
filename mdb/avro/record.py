@@ -87,7 +87,7 @@ class Structure(object):
     ## Serialization
 
     def __getstate__(self):
-        return dict((n, marshall.getstate(getattr(self, n))) for n in self.__all__)
+        return dict((n, getattr(self, n)) for n in self.__all__)
 
     def __setstate__(self, state):
         self.update(state)

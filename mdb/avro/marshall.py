@@ -27,13 +27,19 @@ except ImportError:
 def dumps(obj):
     """Serialize an object to a JSON string."""
 
-    return json.dumps(getstate(obj), sort_keys=True)
+    return json.dumps(getstate(obj), sort_keys=True, default=json_default)
 
 def loads(data, cls):
     """Unserialize and object from a JSON string.  The second argument
     is the object's type."""
 
     return types.cast(json.loads(data), cls)
+
+def json_default(obj):
+    state = getstate(obj)
+    if state is obj:
+        raise TypeError('%r is not JSON serializable' % (obj,))
+    return state
 
 
 ### Binary
@@ -143,10 +149,25 @@ class DatumWriter(io.DatumWriter):
         method = 'write_%s' % writers_schema.type
         if hasattr(encoder, method):
             getattr(encoder, method)(datum)
+        elif method == 'write_union':
+            ## Don't getstate() since write_union() needs to know the
+            ## Python type of datum.
+            self.write_union(writers_schema, datum, encoder)
         elif hasattr(self, method):
             getattr(self, method)(writers_schema, getstate(datum), encoder)
         else:
             raise _s.AvroException('Unknown type: %r.' % writers_schema.type)
+
+    def write_union(self, union, datum, encoder):
+        index, schema = self.union_schema(union, datum)
+        encoder.write_long(index)
+        self.write_data(schema, datum, encoder)
+
+    def union_schema(self, union, datum):
+        for index, cls in enumerate(types.from_schema(s) for s in union.schemas):
+            if isinstance(datum, cls):
+                return index, union.schemas[index]
+        raise io.AvroTypeException(union, datum)
 
     def write_error(self, *args):
         return self.write_record(*args)
@@ -182,6 +203,16 @@ class DatumReader(io.DatumReader):
         cls = types.get_type(types.type_name(writers_schema))
         val = super(DatumReader, self).read_record(writers_schema, readers_schema, decoder)
         return types.cast(val, cls)
+
+    def read_union(self, writers_schema, readers_schema, decoder):
+
+        ## NOTE: work around lack of schema reconciliation.
+
+        index = int(decoder.read_long())
+        return self.read_data(
+            writers_schema.schemas[index],
+            readers_schema.schemas[index],
+            decoder)
 
     def read_error(self, *args):
         return self.read_record(*args)

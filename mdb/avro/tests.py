@@ -32,6 +32,14 @@ SCHEMA = """
         { "name": "next", "type": "Test.Pointer" }
     ]
 }
+
+{
+    "type": "record",
+    "name": "Test.Box",
+    "fields": [
+        { "name": "value", "type": [ "null", "Test.uuid", "Test.Pointer" ]}
+    ]
+}
 """
 
 class TestExternalSchema(unittest.TestCase):
@@ -45,7 +53,7 @@ class TestExternalSchema(unittest.TestCase):
     def test_load(self):
         loaded = schema.load(SCHEMA)
         self.assertEqual([s.fullname for s in loaded],
-                         ['Test.uuid', 'Test.Pointer', 'Test.Link'])
+                         ['Test.uuid', 'Test.Pointer', 'Test.Link', 'Test.Box'])
 
     def test_get(self):
         schema.load(SCHEMA)
@@ -138,11 +146,16 @@ class TestTypes(unittest.TestCase):
 
         self.uuid = uuid
 
-        ## Add a record into the mix.
         class Pointer(structure('Test.Pointer')):
             pass
 
         self.Pointer = Pointer
+
+        class Box(structure('Test.Box')):
+            pass
+
+        self.Box = Box
+        self.ValueUnion = union(null, uuid, Pointer)
 
         ## Arrays an maps over primitive and named types.
         self.ITree = mapping(int)
@@ -156,6 +169,15 @@ class TestTypes(unittest.TestCase):
         value = '\xddm\x92\xa1\xcfwE>\xa4\x18\x01\x18uw\xf2\xaf'
         return self.expect(self.uuid(value),
                            '\x02\x00\x12Test.uuid' + value)
+
+    def test_box(self):
+        self.expect(self.Box(None), '\x02\x00\x10Test.Box\x00')
+
+        self.expect(self.Box(self.uuid('1234567890123456')),
+                    '\x02\x00\x10Test.Box\x021234567890123456')
+
+        self.expect(self.Box(self.Pointer("foo")),
+                    '\x02\x00\x10Test.Box\x04\x06foo')
 
     def test_itree(self):
         return self.expect(self.ITree(a=1, b=2),

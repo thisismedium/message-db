@@ -11,7 +11,7 @@ from avro import schema as _s
 __all__ = (
     'cast', 'get_type', 'type_name',
     'null', 'string', 'boolean', 'bytes', 'int', 'long', 'float', 'double',
-    'fixed',
+    'fixed', 'union',
     'mapping', 'array'
 )
 
@@ -61,6 +61,8 @@ def type_name(type):
             return complex_name(type.type, type.items)
         elif isinstance(type, _s.MapSchema):
             return complex_name(type.type, type.values)
+        elif isinstance(type, _s.UnionSchema):
+            return complex_name(type.type, *[type_name(s) for s in type.schemas])
         type = type.type
 
     return getattr(type, '__kind__', None) or getattr(type, '__name__', type)
@@ -175,8 +177,8 @@ class Fixed(str):
 ## A naming convention of complex<type> is used to memoize Python
 ## types and to box serialized data.
 
-def complex_name(kind, value):
-    return '%s<%s>' % (kind, type_name(value))
+def complex_name(kind, *values):
+    return '%s<%s>' % (kind, ', '.join(type_name(v) for v in values))
 
 ## The keys for mapping types must be strings.  A tree is used as a
 ## base type to ensure the keys are kept in a consistent order.  This
@@ -184,8 +186,6 @@ def complex_name(kind, value):
 ## to make a key for it.  If normal dictionaries are used, the items
 ## may be written in random order and equal objects would not hash to
 ## the same value.
-
-Mapping = tree
 
 def mapping(values):
     kind = complex_name('map', values)
@@ -199,6 +199,8 @@ def mapping(values):
             '__getstate__': lambda s: s
         }))
 
+Mapping = tree
+
 def mapping_schema(values):
     schema = _s.MapSchema('null', SCHEMATA)
     schema.set_prop('values', to_schema(values))
@@ -206,13 +208,6 @@ def mapping_schema(values):
 
 ## Arrays are implemented as lists.  The special base class allows
 ## the reader to create the correct type of object with a cast().
-
-class Array(list):
-
-    @classmethod
-    def __adapt__(cls, obj):
-        if isinstance(obj, Iterable):
-            return cls(obj)
 
 def array(items):
     kind = complex_name('array', items)
@@ -225,9 +220,47 @@ def array(items):
             '__schema__': array_schema(items)
         }))
 
+class Array(list):
+
+    @classmethod
+    def __adapt__(cls, obj):
+        if isinstance(obj, Iterable):
+            return cls(obj)
+
 def array_schema(items):
     schema = _s.ArraySchema('null', SCHEMATA)
     schema.set_prop('items', to_schema(items))
+    return schema
+
+## Unions represent more than one possible type.
+
+def union(*types):
+    kind = complex_name('union', *types)
+    try:
+        return get_type(kind)
+    except NameError:
+        return declare(type(kind, (Union, ), {
+            'type': types,
+            '__kind__': kind,
+            '__schema__': union_schema(types)
+        }))
+
+class Union(object):
+
+    @classmethod
+    def __adapt__(cls, val):
+        if isinstance(val, cls.type):
+            return val
+
+        for kind in cls.type:
+            try:
+                return cast(val, kind)
+            except AdaptationFailure:
+                pass
+
+def union_schema(types):
+    schema = _s.UnionSchema([], SCHEMATA)
+    schema._schemas = list(to_schema(t) for t in types)
     return schema
 
 
