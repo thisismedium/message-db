@@ -205,4 +205,67 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(type(obj), type(val))
         self.assertEqual(obj, val)
 
+INHERIT = """
+{
+    "type": "record",
+    "name": "Test.Item",
+    "fields": [
+        { "name": "name", "type": "string" },
+        { "name": "title", "type": "string" },
+        { "name": "folder", "type": "string" }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "Test.Folder",
+    "base": "Test.Item",
+    "fields": [
+        { "name": "default_name", "type": "string" },
+        { "name": "title", "type": "string" }
+    ]
+}
+
+{
+    "type": "record",
+    "name": "Test.Site",
+    "base": "Test.Folder"
+}
+"""
+
+class TestInherit(unittest.TestCase):
+
+    def setUp(self):
+        schema.clear()
+        schema.load(INHERIT)
+
+        class Item(structure('Test.Item')):
+            pass
+
+        class Folder(structure('Test.Folder')):
+            pass
+
+        class Site(structure('Test.Site')):
+            pass
+
+        self.Item = Item
+        self.Folder = Folder
+        self.Site = Site
+
+    def test_hierarchy(self):
+        self.assert_(issubclass(self.Folder, self.Item))
+        self.assert_(issubclass(self.Site, self.Folder))
+
+    def test_fields(self):
+        self.assertEqual([f.name for f in types.to_schema(self.Item).fields],
+                         ['name', 'title', 'folder'])
+
+        self.assertEqual([f.name for f in types.to_schema(self.Folder).fields],
+                         ['name', 'folder', 'default_name', 'title'])
+
+        self.assertEqual([f.name for f in types.to_schema(self.Site).fields],
+                         ['name', 'folder', 'default_name', 'title'])
+
+
+
 

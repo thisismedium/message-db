@@ -21,10 +21,21 @@ def structure(name, weak=False):
     """Make a structure base class for an externally defined
     schema."""
 
-    return type(name, (Structure, ), {
+    ## Structures may be defined with a "base" property that names a
+    ## parent record to inherit from.  If not given, inherit from
+    ## Structure.
+    schema = types.get_schema(name)
+    base_name = schema.get_prop('base')
+    base = types.get_type(base_name) if base_name else Structure
+
+    slots = ()
+    if weak and '__weakref__' not in base.__all__:
+        slots = ('__weakref__', )
+
+    return type(name, (base, ), {
         '__kind__': name,
         '__abstract__': True,
-        '__slots__': ('__weakref__', ) if weak else ()
+        '__slots__': slots
     })
 
 class RecordType(type):
@@ -34,7 +45,7 @@ class RecordType(type):
         abstract = attr.setdefault('__abstract__', False)
 
         if '__kind__' in attr:
-            mcls.use_schema(attr)
+            mcls.use_schema(bases, attr)
         else:
             attr.setdefault('__slots__', ())
 
@@ -47,10 +58,18 @@ class RecordType(type):
         return cls
 
     @classmethod
-    def use_schema(mcls, attr):
+    def use_schema(mcls, bases, attr):
+        ## Find the right schema.
         obj = attr['__schema__'] = types.get_schema(attr['__kind__'])
+
+        ## Use the schema doc property as the class docstring.
         attr.setdefault('__doc__', obj.props.get('doc', ''))
-        attr['__slots__'] += tuple(f.name for f in obj.fields)
+
+        ## Add new slots to the tuple of slots.  Fields may be
+        ## redeclared in a child schema; exclude them from the slots
+        ## since Python will complain about duplicate slot names.
+        used = set(s for b in bases for s in getattr(b, '__all__', ()))
+        attr['__slots__'] += tuple(f.name for f in obj.fields if f.name not in used)
 
     def __getstate__(cls):
         return marshall.json.loads(str(cls.__schema__))
@@ -99,10 +118,10 @@ class Structure(object):
 
     @classmethod
     def __restore__(cls, state):
-        obj = cls.__new__(cls)
+        obj = object.__new__(cls)
         for field in cls.__schema__.fields:
             name = field.name
-            cls = types.get_type(types.type_name(field))
+            cls = types.from_schema(field)
             setattr(obj, name, types.cast(state[name], cls))
         return obj
 

@@ -63,7 +63,7 @@ def unbox_type(name):
 ## The null codec does nothing to the serialized data.  The compress
 ## codec isn't implemented yet.
 
-def dump_null(obj, port, box=box_type):
+def dump_null(obj, port, box=box_type, header=True):
     """Serialize an object to a binary stream.
 
     If box is None, no type tag is written.  Otherwise, it can be a
@@ -73,7 +73,8 @@ def dump_null(obj, port, box=box_type):
     be = BinaryEncoder(port)
 
     ## Header
-    _write_header(be, 'null')
+    if header:
+        _write_header(be, 'null')
     if box:
         be.write_utf8(box(obj))
 
@@ -81,7 +82,7 @@ def dump_null(obj, port, box=box_type):
     dw.write(obj, be)
     return port
 
-def load_null(port, cls=None, unbox=unbox_type):
+def load_null(port, cls=None, unbox=unbox_type, header=True):
     """Unserialize an object from a binary stream.
 
     If unbox is None, the object must not be tagged with a type.
@@ -90,9 +91,10 @@ def load_null(port, cls=None, unbox=unbox_type):
 
     bd = BinaryDecoder(port)
 
-    (version, codec) = _read_header(bd)
-    assert version == BINARY_VERSION
-    assert codec == BINARY_CODEC['null']
+    if header:
+        (version, codec) = _read_header(bd)
+        assert version == BINARY_VERSION
+        assert codec == BINARY_CODEC['null']
 
     if unbox:
         cls = unbox(bd.read_utf8())

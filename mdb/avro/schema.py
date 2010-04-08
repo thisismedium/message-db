@@ -72,17 +72,46 @@ LOADED = {}
 ## declarations, this declare() method is defined separately from
 ## load().
 
-def declare(definition):
+def declare(defn):
     """Declare a schema using Python data as the definition."""
 
     try:
-        schema = _s.make_avsc_object(definition, types.SCHEMATA)
+        schema = extra(defn, _s.make_avsc_object(inherit(defn), types.SCHEMATA))
     except _s.SchemaParseException as exc:
-        raise SyntaxError('%s while declaring %r.' % (exc, definition))
+        raise SyntaxError('%s while declaring %r.' % (exc, defn))
 
     key = types.type_name(schema)
     if types.SCHEMATA.setdefault(key, schema) is not schema:
         raise TypeError('Schema %r has already been declared.' % key)
+    return schema
+
+## The Avro record schema is extended with a "base" attribute.  This
+## is a single type that the record inherits from.  For compatibility
+## with Avro, field definitions are copied from the base when the
+## subclass is loaded.  This makes "base" a DRY declaration shortcut
+## and a metadata value that can be used to generate Python classes
+## with the correct type relationships.
+
+def inherit(defn):
+    base = isinstance(defn, Mapping) and defn.get('base')
+    if not (base and defn.get('type') == 'record'):
+        return defn
+    return inherit_fields(types.get_schema(base), defn)
+
+def inherit_fields(base, defn):
+    fields = defn.get('fields', ())
+    new = set(f.get('name') for f in fields)
+    return update(defn, fields=extend(
+        [json.loads(str(f)) for f in base.fields if f.name not in new],
+        fields))
+
+## Avro schema only track important properties by default.  Extend the
+## schema object with metadata in the definition.
+
+def extra(defn, schema):
+    for (key, val) in defn.iteritems():
+        if not hasattr(schema, key) and key not in schema.props:
+            schema.set_prop(key, val)
     return schema
 
 ## The clear() method is here to allow unit tests to reset the global
