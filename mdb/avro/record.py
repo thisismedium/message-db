@@ -17,7 +17,7 @@ __all__ = ('structure', 'Structure')
 # constructor in field-order.  No type-checking is done for the
 # fields.
 
-def structure(name, weak=False):
+def structure(name, weak=False, base=None):
     """Make a structure base class for an externally defined
     schema."""
 
@@ -26,7 +26,7 @@ def structure(name, weak=False):
     ## Structure.
     schema = types.get_schema(name)
     base_name = schema.get_prop('base')
-    base = types.get_type(base_name) if base_name else Structure
+    base = types.get_type(base_name) if base_name else (base or Structure)
 
     slots = ()
     if weak and '__weakref__' not in base.__all__:

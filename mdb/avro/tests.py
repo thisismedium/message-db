@@ -158,8 +158,8 @@ class TestTypes(unittest.TestCase):
         self.ValueUnion = union(null, uuid, Pointer)
 
         ## Arrays an maps over primitive and named types.
-        self.ITree = mapping(int)
-        self.PTree = mapping(Pointer)
+        self.ITree = map(int)
+        self.PTree = map(Pointer)
         self.IArray = array(int)
 
         ## A 3-level deep non-named Python type.

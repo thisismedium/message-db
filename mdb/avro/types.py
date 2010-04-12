@@ -12,7 +12,7 @@ __all__ = (
     'cast', 'get_type', 'type_name',
     'null', 'string', 'boolean', 'bytes', 'int', 'long', 'float', 'double',
     'fixed', 'union',
-    'mapping', 'array'
+    'map', 'array'
 )
 
 ## Support type casting using the Adaptation protocol.  The adapt()
@@ -187,21 +187,21 @@ def complex_name(kind, *values):
 ## may be written in random order and equal objects would not hash to
 ## the same value.
 
-def mapping(values):
+def map(values):
     kind = complex_name('map', values)
     try:
         return get_type(kind)
     except NameError:
-        return declare(type(kind, (Mapping, ), {
+        return declare(type(kind, (Map, ), {
             'type': values,
             '__kind__': kind,
-            '__schema__': mapping_schema(values),
+            '__schema__': map_schema(values),
             '__getstate__': lambda s: s
         }))
 
-Mapping = tree
+Map = tree
 
-def mapping_schema(values):
+def map_schema(values):
     schema = _s.MapSchema('null', SCHEMATA)
     schema.set_prop('values', to_schema(values))
     return schema
