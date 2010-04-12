@@ -76,7 +76,7 @@ def declare(defn):
     """Declare a schema using Python data as the definition."""
 
     try:
-        schema = extra(defn, _s.make_avsc_object(inherit(defn), types.SCHEMATA))
+        schema = extra(defn, make_schema(inherit(defn), types.SCHEMATA))
     except _s.SchemaParseException as exc:
         raise SyntaxError('%s while declaring %r.' % (exc, defn))
 
@@ -84,6 +84,21 @@ def declare(defn):
     if types.SCHEMATA.setdefault(key, schema) is not schema:
         raise TypeError('Schema %r has already been declared.' % key)
     return schema
+
+## MONKEY PATCH!!!
+
+_make_schema = _s.make_avsc_object
+
+def make_schema(defn, names=None):
+    if callable(getattr(defn, 'get', None)):
+        type = defn.get('type')
+        if type == 'omap':
+            return types.OMapSchema(defn.get('values'), names)
+    return _make_schema(defn, names)
+
+_s.make_avsc_object = make_schema
+
+## END MONEY PATCH
 
 ## The Avro record schema is extended with a "base" attribute.  This
 ## is a single type that the record inherits from.  For compatibility

@@ -227,7 +227,8 @@ INHERIT = """
     "base": "Test.Item",
     "fields": [
         { "name": "default_name", "type": "string" },
-        { "name": "title", "type": "string" }
+        { "name": "title", "type": "string" },
+        { "name": "contents", "type": { "type": "omap", "values": "int" } }
     ]
 }
 
@@ -266,10 +267,10 @@ class TestInherit(unittest.TestCase):
                          ['name', 'title', 'folder'])
 
         self.assertEqual([f.name for f in types.to_schema(self.Folder).fields],
-                         ['name', 'folder', 'default_name', 'title'])
+                         ['name', 'folder', 'default_name', 'title', 'contents'])
 
         self.assertEqual([f.name for f in types.to_schema(self.Site).fields],
-                         ['name', 'folder', 'default_name', 'title'])
+                         ['name', 'folder', 'default_name', 'title', 'contents'])
 
 
 
