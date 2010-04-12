@@ -159,6 +159,7 @@ class TestTypes(unittest.TestCase):
 
         ## Arrays an maps over primitive and named types.
         self.ITree = map(int)
+        self.OIMap = omap(int)
         self.PTree = map(Pointer)
         self.IArray = array(int)
 
@@ -182,6 +183,10 @@ class TestTypes(unittest.TestCase):
     def test_itree(self):
         return self.expect(self.ITree(a=1, b=2),
                            '\x02\x00\x10map<int>\x04\x02a\x02\x02b\x04\x00')
+
+    def test_oitree(self):
+        return self.expect(self.OIMap([('c', 1), ('a', 2), ('b', 3)]),
+                           '\x02\x00\x12omap<int>\x06\x02c\x02\x02a\x04\x02b\x06\x00')
 
     def test_ptree(self):
         return self.expect(self.PTree(a=self.Pointer('alpha'), b=self.Pointer('beta')),

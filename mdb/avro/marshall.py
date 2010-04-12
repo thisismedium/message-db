@@ -160,6 +160,9 @@ class DatumWriter(io.DatumWriter):
         else:
             raise _s.AvroException('Unknown type: %r.' % writers_schema.type)
 
+    def write_omap(self, *args):
+        return self.write_map(*args)
+
     def write_union(self, union, datum, encoder):
         index, schema = self.union_schema(union, datum)
         encoder.write_long(index)
@@ -206,15 +209,27 @@ class DatumReader(io.DatumReader):
         val = super(DatumReader, self).read_record(writers_schema, readers_schema, decoder)
         return types.cast(val, cls)
 
-    def read_union(self, writers_schema, readers_schema, decoder):
+    def read_map(self, ws, *args):
+        return types.from_schema(ws)(self._map(ws, *args))
 
+    read_omap = read_map
+
+    def _map(self, ws, rs, decoder):
+        count = decoder.read_long()
+        while count != 0:
+            if count < 0:
+                count = -count
+                size = decoder.read_long()
+            for i in xrange(count):
+                key = decoder.read_utf8()
+                val = self.read_data(ws.values, rs.values, decoder)
+                yield (key, val)
+            count = decoder.read_long()
+
+    def read_union(self, ws, rs, decoder):
         ## NOTE: work around lack of schema reconciliation.
-
         index = int(decoder.read_long())
-        return self.read_data(
-            writers_schema.schemas[index],
-            readers_schema.schemas[index],
-            decoder)
+        return self.read_data(ws.schemas[index], rs.schemas[index], decoder)
 
     def read_error(self, *args):
         return self.read_record(*args)

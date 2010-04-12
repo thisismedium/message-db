@@ -12,7 +12,7 @@ __all__ = (
     'cast', 'get_type', 'type_name',
     'null', 'string', 'boolean', 'bytes', 'int', 'long', 'float', 'double',
     'fixed', 'union',
-    'map', 'array'
+    'map', 'omap', 'array'
 )
 
 ## Support type casting using the Adaptation protocol.  The adapt()
@@ -188,23 +188,34 @@ def complex_name(kind, *values):
 ## the same value.
 
 def map(values):
-    kind = complex_name('map', values)
+    return mapping(complex_name('map', values), tree, values, _s.MapSchema)
+
+_omap = omap
+
+def omap(values):
+    return mapping(complex_name('omap', values), _omap, values, OMapSchema)
+
+def mapping(kind, base, values, schema):
     try:
         return get_type(kind)
     except NameError:
-        return declare(type(kind, (Map, ), {
+        return declare(type(kind, (base, ), {
             'type': values,
             '__kind__': kind,
-            '__schema__': map_schema(values),
+            '__schema__': mapping_schema(schema, values),
             '__getstate__': lambda s: s
         }))
 
-Map = tree
-
-def map_schema(values):
-    schema = _s.MapSchema('null', SCHEMATA)
+def mapping_schema(cls, values):
+    schema = cls('null', SCHEMATA)
     schema.set_prop('values', to_schema(values))
     return schema
+
+class OMapSchema(_s.MapSchema):
+
+    def __init__(self, values, names=None):
+        super(OMapSchema, self).__init__(values, names)
+        self.set_prop('type', 'omap')
 
 ## Arrays are implemented as lists.  The special base class allows
 ## the reader to create the correct type of object with a cast().
