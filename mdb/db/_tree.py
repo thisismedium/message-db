@@ -27,7 +27,7 @@ class Content(avro.Structure):
             if val is Undefined:
                 if not field.has_default:
                     raise ValueError('%r is a required field.' % field.name)
-                val = field.default
+                val = avro.cast(field.default, avro.types.from_schema(field))
             setattr(self, field.name, val)
         if kw:
             raise TypeError('%r does not support extra properties: %r.')
@@ -163,9 +163,6 @@ class text(avro.primitive('M.text', avro.string)):
 class html(avro.primitive('M.html', avro.string)):
     """Marked-up text."""
 
-class _folder(avro.union(Key, None)):
-    """The folder field of most items is a key."""
+_folder = avro.union(Key, None)
 
-class _content(avro.omap(Key)):
-    """Folders track their children by mapping the child names to
-    keys."""
+_content = avro.omap(Key)

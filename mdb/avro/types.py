@@ -133,6 +133,7 @@ def primitive(name, base):
 
     return PrimitiveType(name, (base, ), {
         '__kind__': name,
+        '__module__': __name__,
         '__abstract__': True
     })
 
@@ -216,6 +217,7 @@ def mapping(kind, base, values, schema):
     except NameError:
         return declare(type(kind, (base, ), {
             'type': values,
+            '__module__': __name__,
             '__kind__': kind,
             '__schema__': mapping_schema(schema, values),
             '__getstate__': lambda s: s
@@ -242,6 +244,7 @@ def array(items):
     except NameError:
         return declare(type(kind, (Array, ), {
             'type': items,
+            '__module__': '__name__',
             '__kind__': kind,
             '__schema__': array_schema(items)
         }))
@@ -267,6 +270,7 @@ def union(*types):
     except NameError:
         return declare(type(kind, (Union, ), {
             'type': types,
+            '__module__': '__name__',
             '__kind__': kind,
             '__schema__': union_schema(types)
         }))

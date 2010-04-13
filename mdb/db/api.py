@@ -33,6 +33,24 @@ def get(key):
     else:
         return branch().mget(str(k) for k in key)
 
+def make(cls, **kw):
+    name = _slug(kw.get('name') or kw.get('title', ''))
+    if not name:
+        raise ValueError('Missing required title or name.')
+
+    folder = kw.pop('folder', None)
+    item = branch().new(cls, update(
+        kw,
+        name=name,
+        title=(kw.get('title', '').strip() or _title(name))
+    ))
+
+    return add(folder, item) if folder else item
+
+def add(folder, item):
+    folder.add(item)
+    return item
+
 # def _delete(key):
 #     if isinstance(key, models.Model):
 #         key = key.key
@@ -56,24 +74,6 @@ def delta(message):
     delta = branch().begin(message)
     with branch(delta):
         yield delta
-
-def make(cls, **kw):
-    name = _slug(kw.get('name') or kw.get('title', ''))
-    if not name:
-        raise ValueError('Missing required title or name.')
-
-    folder = kw.pop('folder', None)
-    item = branch().new(cls, update(
-        kw,
-        name=name,
-        title=(kw.get('title', '').strip() or _title(name))
-    ))
-
-    return add(folder, item) if folder else item
-
-def add(folder, item):
-    folder.add(item)
-    return item
 
 SLUG = re.compile(r'[^a-z0-9]+')
 def _slug(name):

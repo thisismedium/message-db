@@ -32,7 +32,6 @@ class Item(content('Item')):
 class Folder(content('Folder')):
 
     def __init__(self, **kw):
-        kw['contents'] = omap(kw.get('contents', {}))
         super(Folder, self).__init__(**kw)
 
     def __nonzero__(self):

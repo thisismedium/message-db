@@ -6,7 +6,7 @@
 from __future__ import absolute_import
 import os, unittest
 from md.prelude import *
-from . import *
+from . import *; from . import _tree
 
 def load():
     from . import load
@@ -21,7 +21,7 @@ class TestTree(unittest.TestCase):
 
     def test_root(self):
         self.assertEqual(self.root.name, 'test')
-        self.assertEqual(type(self.root.contents), omap)
+        self.assertEqual(type(self.root.contents), _tree._content)
         self.assertEqual(self.root.contents.keys(), ['about', 'news'])
 
     def test_structure(self):
@@ -34,3 +34,6 @@ class TestTree(unittest.TestCase):
         if not isinstance(top, Folder):
             return top.name
         return (top.name, [self._structure(c) for c in top])
+
+class TestQuery(unittest.TestCase):
+    pass
