@@ -36,4 +36,31 @@ class TestTree(unittest.TestCase):
         return (top.name, [self._structure(c) for c in top])
 
 class TestQuery(unittest.TestCase):
-    pass
+
+    def setUp(self):
+        self.root = load()
+
+    def test_root(self):
+        self._check('/', (Site, 'test'))
+        self._check('.', (Site, 'test'))
+        self._check('*', (Page, 'about'), (Folder, 'news'))
+
+    def test_simple(self):
+        self._check('/news', (Folder, 'news'))
+        self._check('/news/*', (Page, 'article-1'), (Page, 'article-2'), (Page, 'article-3'))
+
+    def test_axis(self):
+        self._check('//.',
+                    (Site, 'test'), (Page, 'about'), (Folder, 'news'),
+                    (Page, 'article-1'), (Page, 'article-2'), (Page, 'article-3'))
+        self._check('/news/article-1/parent::*', (Folder, 'news'))
+
+    def test_kind(self):
+        self._check('/Folder', (Folder, 'news'))
+        self._check('//Page',
+                    (Page, 'about'), (Page, 'article-1'),
+                    (Page, 'article-2'), (Page, 'article-3'))
+
+    def _check(self, path, *result):
+        self.assertEqual(tuple((type(r), r.name) for r in query(path)), result)
+

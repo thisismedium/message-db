@@ -8,10 +8,11 @@
 ## entirely into the global path evaluation context.
 
 from __future__ import absolute_import
-from .. import avro as _a
+from . import _tree
 
 ## Support query_ast.NamedTest
-kind = _a.get_type
+def kind(name):
+    return _tree.get_type('M.%s' % name)
 
 def get(*keys):
     """Abandon the current context; produce a sequence of items

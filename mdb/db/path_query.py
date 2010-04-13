@@ -3,17 +3,17 @@
 
 from __future__ import absolute_import
 from ..query import compiler as comp, parse
-from . import query_ast, ops, datastore as ds
+from . import query_ast, query_ops
 
-__all__ = ('query', 'PathQuery')
+__all__ = ('compile', 'PathQuery')
 
-def query(expr):
+def compile(expr):
     """Compile a path query.
 
     For example, this will compile a path query into and object that
     can be called against some context item:
 
-       db.query('//Page')(db.root())
+       db.compile('//Page')(db.root())
     """
 
     return PathQuery(expr)
@@ -23,5 +23,5 @@ def query(expr):
 
 PathQuery = comp.Evaluator(
     parse.PathParser(query_ast),
-    comp.builtin(comp.use(ops))
+    comp.builtin(comp.use(query_ops))
 )

@@ -8,7 +8,17 @@ import weakref, uuid, base64
 from md.prelude import *
 from .. import avro
 
-__all__ = ('Key', 'text', 'html')
+__all__ = ('get_type', 'type_name', 'Key', 'text', 'html')
+
+
+### Types
+
+get_type = avro.get_type
+
+def type_name(obj):
+    if isinstance(obj, basestring):
+        return obj
+    return avro.type_name(obj)
 
 ## Built-in types are declared in an external schema for now.
 
@@ -129,7 +139,7 @@ class Key(avro.structure('M.key', weak=True)):
     @classmethod
     def make(cls, kind, id=None):
         self = object.__new__(cls)
-        self.kind = avro.string(kind)
+        self.kind = avro.string(type_name(kind))
         self.id = avro.string(id) if id else _uuid(uuid.uuid4().bytes)
         return self._intern()
 

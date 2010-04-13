@@ -41,13 +41,13 @@ def load_yaml(path):
     return root
 
 def _root(name):
-    return api.make(tree.Site, name=name, key_name='root')
+    return tree.make(tree.Site, name=name, key_name='root')
 
 def _item(root, name, data):
-    cls = api.kind(data.pop('kind', 'Item'))
+    cls = tree.get_type(data.pop('kind', 'Item'))
     names = os.path.splitext(name)[0].split('--')
 
-    return api.make(
+    return tree.make(
         cls,
         folder=_folder(root, names[0:-1]),
         **setdefault(data, name=names[-1])
@@ -57,7 +57,7 @@ def _folder(top, names):
     for name in names:
         probe = top.child(name)
         if not probe:
-            probe = api.make(tree.Folder, name=name, folder=top)
+            probe = tree.make(tree.Folder, name=name, folder=top)
         top = probe
     return top
 

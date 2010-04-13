@@ -4,13 +4,18 @@
 """tree -- a content tree"""
 
 from __future__ import absolute_import
+import re
 from md import abc
 from md.prelude import *
 from ..query import tree
-from . import api, _tree
+from . import api, _tree, path_query
 from ._tree import *; from ._tree import content
 
-__all__ = _tree.__all__ + ('Item', 'Folder', 'Site')
+__all__ = _tree.__all__ + (
+    'Item', 'Folder', 'Site', 'Subdomain', 'Page',
+    'root', 'query',
+    'make', 'add'
+)
 
 
 ### Content Tree
@@ -88,3 +93,42 @@ class Subdomain(content('Subdomain')):
 
 class Page(content('Page')):
     pass
+
+
+### Traversal
+
+ROOT = _tree.Key.make(Site, 'root')
+
+def root():
+    return api.get(ROOT)
+
+def query(path, base=None):
+    return path_query.compile(path)(root() if base is None else base)
+
+
+### Manipulation
+
+def make(cls, **kw):
+    name = _slug(kw.get('name') or kw.get('title', ''))
+    if not name:
+        raise ValueError('Missing required title or name.')
+
+    folder = kw.pop('folder', None)
+    item = api.branch().new(cls, update(
+        kw,
+        name=name,
+        title=(kw.get('title', '').strip() or _title(name))
+    ))
+
+    return add(folder, item) if folder else item
+
+def add(folder, item):
+    folder.add(item)
+    return item
+
+SLUG = re.compile(r'[^a-z0-9]+')
+def _slug(name):
+    return SLUG.sub('-', name.lower()).strip('-')
+
+def _title(name):
+    return name.replace('-', ' ').title()

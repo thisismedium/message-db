@@ -4,17 +4,12 @@
 """api -- high-level operations"""
 
 from __future__ import absolute_import
-import re
 from md.prelude import *
 from md import fluid
 from .. import avro, data
 from . import _tree
 
-__all__ = (
-    'branch', 'init', 'kind',
-    'get',
-    'make', 'add', 'delta'
-)
+__all__ = ('branch', 'init', 'get', 'delta')
 
 BRANCH = fluid.cell(None)
 branch = fluid.accessor(BRANCH)
@@ -22,8 +17,6 @@ branch = fluid.accessor(BRANCH)
 def init(zs):
     BRANCH.set(_Branch(zs.open()))
     return zs
-
-kind = avro.get_type
 
 def get(key):
     if key is None or isinstance(key, _tree.Content):
@@ -33,24 +26,6 @@ def get(key):
     else:
         return branch().mget(str(k) for k in key)
 
-def make(cls, **kw):
-    name = _slug(kw.get('name') or kw.get('title', ''))
-    if not name:
-        raise ValueError('Missing required title or name.')
-
-    folder = kw.pop('folder', None)
-    item = branch().new(cls, update(
-        kw,
-        name=name,
-        title=(kw.get('title', '').strip() or _title(name))
-    ))
-
-    return add(folder, item) if folder else item
-
-def add(folder, item):
-    folder.add(item)
-    return item
-
 # def _delete(key):
 #     if isinstance(key, models.Model):
 #         key = key.key
@@ -58,9 +33,6 @@ def add(folder, item):
 #         stm.delete(key)
 #     else:
 #         for k in key: stm.delete(k)
-
-
-### Utilities
 
 
 ### Changes
@@ -74,13 +46,6 @@ def delta(message):
     delta = branch().begin(message)
     with branch(delta):
         yield delta
-
-SLUG = re.compile(r'[^a-z0-9]+')
-def _slug(name):
-    return SLUG.sub('-', name.lower()).strip('-')
-
-def _title(name):
-    return name.replace('-', ' ').title()
 
 class _Branch(object):
     """A _Branch is a thin wrapper that acts as an interface between
