@@ -11,7 +11,7 @@ from avro import schema as _s
 __all__ = (
     'cast', 'get_type', 'type_name',
     'null', 'string', 'boolean', 'bytes', 'int', 'long', 'float', 'double',
-    'fixed', 'union',
+    'primitive', 'fixed', 'union',
     'map', 'omap', 'array'
 )
 
@@ -128,20 +128,15 @@ class bytes(str):
 class double(float):
     __slots__ = ()
 
-
-### Fixed
+def primitive(name, base):
+    """Declare a named, primitive type."""
 
-## Fixed schema are named types with a specific length.
-
-def fixed(name):
-    """Make a fixed base class for an externally defined schema."""
-
-    return type(name, (Fixed, ), {
+    return PrimitiveType(name, (base, ), {
         '__kind__': name,
         '__abstract__': True
     })
 
-class FixedType(type):
+class PrimitiveType(type):
 
     def __new__(mcls, name, bases, attr):
         abstract = attr.setdefault('__abstract__', False)
@@ -159,11 +154,31 @@ class FixedType(type):
     @classmethod
     def use_schema(mcls, attr):
         obj = attr['__schema__'] = get_schema(attr['__kind__'])
-        attr.setdefault('d__doc__', obj.props.get('doc', ''))
+        attr.setdefault('__doc__', obj.props.get('doc', ''))
+
+class NamedPrimitive(_s.NamedSchema):
+
+    def __str__(self):
+        return json.dumps(self.props)
+
+    def __eq__(self, other):
+        if isinstance(other, _s.Schema):
+            return self.props == other.props
+        return NotImplemented
+
+
+### Fixed
+
+## Fixed schema are named types with a specific length.
+
+def fixed(name):
+    """Make a fixed base class for an externally defined schema."""
+
+    return primitive(name, Fixed)
 
 class Fixed(str):
     __abstract__ = True
-    __metaclass__ = FixedType
+    __metaclass__ = PrimitiveType
 
     @classmethod
     def __adapt__(cls, value):

@@ -92,8 +92,16 @@ _make_schema = _s.make_avsc_object
 def make_schema(defn, names=None):
     if callable(getattr(defn, 'get', None)):
         type = defn.get('type')
-        if type == 'omap':
+        name = defn.get('name')
+
+        if type in _s.PRIMITIVE_TYPES:
+            if name:
+                ns = defn.get('namespace')
+                return types.NamedPrimitive(type, name, ns, names)
+            return _s.PrimitiveSchema(type)
+        elif type == 'omap':
             return types.OMapSchema(defn.get('values'), names)
+
     return _make_schema(defn, names)
 
 _s.make_avsc_object = make_schema

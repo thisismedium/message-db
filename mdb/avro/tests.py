@@ -15,6 +15,8 @@ from . import *
 SCHEMA = """
 { "type": "fixed", "name": "Test.uuid", "size": 16 }
 
+{ "type": "string", "name": "text" }
+
 {
     "type": "record",
     "name": "Test.Pointer",
@@ -28,7 +30,7 @@ SCHEMA = """
     "name": "Test.Link",
     "doc": "A linked list.",
     "fields": [
-        { "name": "value", "type": "string" },
+        { "name": "value", "type": "text" },
         { "name": "next", "type": "Test.Pointer" }
     ]
 }
@@ -53,7 +55,7 @@ class TestExternalSchema(unittest.TestCase):
     def test_load(self):
         loaded = schema.load(SCHEMA)
         self.assertEqual([s.fullname for s in loaded],
-                         ['Test.uuid', 'Test.Pointer', 'Test.Link', 'Test.Box'])
+                         ['Test.uuid', 'text', 'Test.Pointer', 'Test.Link', 'Test.Box'])
 
     def test_get(self):
         schema.load(SCHEMA)
@@ -87,12 +89,16 @@ class TestStructure(unittest.TestCase):
         schema.clear()
         schema.load(SCHEMA)
 
+        class text(primitive('text', string)):
+            pass
+
         class Pointer(structure('Test.Pointer', weak=True)):
             pass
 
         class Link(structure('Test.Link')):
             pass
 
+        self.text = text
         self.Pointer = Pointer
         self.Link = Link
 
