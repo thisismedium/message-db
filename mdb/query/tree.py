@@ -248,7 +248,7 @@ def self(item):
 
 @axis(Step)
 def parent(item):
-    probe = item.folder
+    probe = item.parent
     if probe:
         yield probe
 
@@ -325,7 +325,7 @@ def preceding(item):
 
 @axis(Step)
 def sibling(item):
-    return (x for x in item.folder if x != item)
+    return (x for x in item.parent if x != item)
 
 
 ### Aux
@@ -336,10 +336,10 @@ def orself(item, walk):
         yield x
 
 def ascend(item):
-    probe = item.folder
+    probe = item.parent
     while probe:
         yield probe
-        probe = probe.folder
+        probe = probe.parent
 
 def descend(item):
     if leaf(item):
@@ -352,11 +352,11 @@ def descend(item):
             queue.extend(item)
 
 def before(item):
-    parent = item.folder
+    parent = item.parent
     return parent.before(item) if parent else ()
 
 def after(item):
-    parent = item.folder
+    parent = item.parent
     return parent.after(item) if parent else ()
 
 def unique(seq):
