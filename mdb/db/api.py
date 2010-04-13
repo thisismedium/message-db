@@ -26,13 +26,13 @@ def get(key):
     else:
         return branch().mget(str(k) for k in key)
 
-# def _delete(key):
-#     if isinstance(key, models.Model):
-#         key = key.key
-#     if isinstance(key, (basestring, models.Key)):
-#         stm.delete(key)
-#     else:
-#         for k in key: stm.delete(k)
+def _delete(key):
+    if isinstance(key, _tree.Content):
+        key = key.key
+    if isinstance(key, (basestring, _tree.Key)):
+        branch().delete(key)
+    else:
+        for k in key: branch().delete(k)
 
 
 ### Changes
@@ -67,8 +67,15 @@ class _Branch(object):
 
     def checkpoint(self, mark, message, delta):
         with data.message(message):
-            self._zs.end_transaction(mark, self._zs.checkpoint(delta))
+            changes = self._persist(delta)
+            self._zs.end_transaction(mark, self._zs.checkpoint(changes))
         return self
+
+    def _persist(self, delta):
+        for key in delta:
+            if delta[key] is Undefined:
+                delta[key] = data.Deleted
+        return delta
 
 class _Delta(object):
     """A delta is a set of changes about to be committed to a
@@ -106,7 +113,9 @@ class _Delta(object):
             for obj in self._source.mget(need):
                 yield obj
 
+    def delete(self, key):
+        self._data[key] = Undefined
+
     def checkpoint(self):
         self._source.checkpoint(self._mark, self._message, self._data)
         return self
-

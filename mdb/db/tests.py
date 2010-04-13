@@ -30,6 +30,30 @@ class TestTree(unittest.TestCase):
                           ['about',
                            ('news', ['article-1', 'article-2', 'article-3'])]))
 
+    def test_path(self):
+        self.assertEqual(path(resolve('/news/article-2')), '/news/article-2')
+
+    def test_add(self):
+        with delta('Add Page') as d:
+            add(self.root, make(Page, name='hello'))
+            d.checkpoint()
+        self.assertEqual([c.name for c in self.root], ['about', 'news', 'hello'])
+
+    def test_update(self):
+        with delta('Update Page') as d:
+            about = resolve('/about')
+            about.description = 'Changed description!'
+            d.checkpoint()
+        self.assertEqual(resolve('/about').description, 'Changed description!')
+
+    def test_remove(self):
+        with delta('Remove article-2') as d:
+            remove(resolve('/news/article-2'))
+            d.checkpoint()
+
+        self.assertEqual(self._structure(resolve('/news')),
+                         ('news', ['article-1', 'article-3']))
+
     def _structure(self, top):
         if not isinstance(top, Folder):
             return top.name
@@ -47,13 +71,17 @@ class TestQuery(unittest.TestCase):
 
     def test_simple(self):
         self._check('/news', (Folder, 'news'))
-        self._check('/news/*', (Page, 'article-1'), (Page, 'article-2'), (Page, 'article-3'))
+        self._check('/news/*',
+                    (Page, 'article-1'), (Page, 'article-2'), (Page, 'article-3'))
 
     def test_axis(self):
         self._check('//.',
                     (Site, 'test'), (Page, 'about'), (Folder, 'news'),
                     (Page, 'article-1'), (Page, 'article-2'), (Page, 'article-3'))
         self._check('/news/article-1/parent::*', (Folder, 'news'))
+        self._check('/news/article-2/sibling::*', (Page, 'article-1'), (Page, 'article-3'))
+        self._check('/news/article-2/preceding-sibling::*', (Page, 'article-1'))
+        self._check('/news/article-2/following-sibling::*', (Page, 'article-3'))
 
     def test_kind(self):
         self._check('/Folder', (Folder, 'news'))
@@ -63,4 +91,6 @@ class TestQuery(unittest.TestCase):
 
     def _check(self, path, *result):
         self.assertEqual(tuple((type(r), r.name) for r in query(path)), result)
+
+
 

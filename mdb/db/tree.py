@@ -13,8 +13,8 @@ from ._tree import *; from ._tree import content
 
 __all__ = _tree.__all__ + (
     'Item', 'Folder', 'Site', 'Subdomain', 'Page',
-    'root', 'query',
-    'make', 'add'
+    'root', 'query', 'path', 'resolve',
+    'make', 'add', 'remove'
 )
 
 
@@ -64,7 +64,8 @@ class Folder(content('Folder')):
     def after(self, item):
         seq = self.contents.itervalues(item.name, None)
         # The sequence begins with item; skip it.
-        return (api.get(k) for k in next(seq, None))
+        next(seq, None)
+        return (api.get(k) for k in seq)
 
     def child(self, name, default=None):
         key = self.contents.get(name)
@@ -105,6 +106,29 @@ def root():
 def query(path, base=None):
     return path_query.compile(path)(root() if base is None else base)
 
+def path(item):
+    up = (i.name for i in tree.orself(item, tree.ascend) if i.folder)
+    return '/%s' % '/'.join(reversed(list(up)))
+
+def resolve(expr, base=None):
+    steps = expr.strip('/')
+    if not steps:
+        return root() if expr.startswith('/') else (base or root())
+
+    base = base or root()
+    for name in steps.split('/'):
+        probe = base.child(name)
+        if not probe:
+            raise ValueError('Bad expr: %r (%r has no child %r).' % (
+                expr, path(base), name
+            ))
+        base = probe
+
+    return base
+
+def walk(item):
+    return tree.orself(item, tree.descend)
+
 
 ### Manipulation
 
@@ -125,6 +149,13 @@ def make(cls, **kw):
 def add(folder, item):
     folder.add(item)
     return item
+
+def remove(child):
+    if child == root():
+        raise ValueError('Cannot remove the root item.')
+    folder = child.parent.remove(child)
+    api._delete(list(walk(child)))
+    return folder
 
 SLUG = re.compile(r'[^a-z0-9]+')
 def _slug(name):
