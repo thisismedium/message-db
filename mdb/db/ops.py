@@ -11,7 +11,7 @@ from __future__ import absolute_import
 from .. import avro as _a
 
 ## Support query_ast.NamedTest
-kind = _a.get
+kind = _a.get_type
 
 def get(*keys):
     """Abandon the current context; produce a sequence of items

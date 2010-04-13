@@ -16,17 +16,21 @@
     "fields": [
         { "name": "name", "type": "string" },
         { "name": "title", "type": "string" },
-        { "name": "folder", "type": "M.key" }
+        { "name": "folder", "type": [ "M.key", "null" ], "default": null }
     ]
 }
+
+{ "name": "M.text", "type": "string" }
+
+{ "name": "M.html", "type": "string" }
 
 {
     "type": "record",
     "name": "M.Folder",
     "base": "M.Item",
     "fields": [
-        { "name": "default_name", "type": "string" },
-        { "name": "contents", "type": { "type": "map", "values": "M.key" } }
+        { "name": "default_name", "type": "string", "default": "" },
+        { "name": "contents", "type": { "type": "omap", "values": "M.key" }, "default": {} }
     ]
 }
 
@@ -40,4 +44,14 @@
     "type": "record",
     "name": "M.Subdomain",
     "base": "M.Site"
+}
+
+{
+    "type": "record",
+    "name": "M.Page",
+    "base": "M.Item",
+    "fields": [
+        { "name": "description", "type": "M.text", "default": "" },
+        { "name": "content", "type": "M.html", "default": "" }
+    ]
 }

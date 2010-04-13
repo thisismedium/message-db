@@ -4,144 +4,88 @@
 """tree -- a content tree"""
 
 from __future__ import absolute_import
-import weakref, uuid, base64
-from .. import avro
+from md import abc
+from md.prelude import *
+from ..query import tree
+from . import api, _tree
+from ._tree import *; from ._tree import content
 
-__all__ = ('Key', 'Item', 'Folder', 'Site')
-
-## Built-in types are declared in an external schema for now.
-
-avro.require('tree.json')
+__all__ = _tree.__all__ + ('Item', 'Folder', 'Site')
 
 
 ### Content Tree
 
-class Item(avro.structure('M.Item')):
-    pass
-
-class Folder(avro.structure('M.Folder')):
-    pass
-
-class Site(avro.structure('M.Site')):
-    pass
-
-class Subdomain(avro.structure('M.Subdomain')):
-    pass
-
-
-### Key
-
-class Key(avro.structure('M.key', weak=True)):
-    """A Key identifies a model instance.
-
-    >>> k1 = Key.make('Foo')
-    >>> k2 = Key.make('Foo')
-    >>> k3 = Key.make('Foo', 'bar'); k3
-    Key('BkZvbwIGYmFy')
-    >>> k1 is not k2
-    True
-    >>> k2 is Key(str(k2))
-    True
-    >>> k3 is Key.make('Foo', 'bar')
-    True
-    >>> k3 is Key('BkZvbwIGYmFy')
-    True
-    >>> k3.kind
-    u'Foo'
-    >>> k3.id
-    u'bar'
-    >>> avro.cast('BkZvbwIGYmFy', Key)
-    Key('BkZvbwIGYmFy')
-    """
-
-    __slots__ = ('_encoded', )
-
-    ## There are lots of Keys; intern them to avoid some object
-    ## allocation.
-
-    INTERNED = weakref.WeakValueDictionary()
-
-    def __new__(cls, encoded):
-        encoded = str(encoded)
-        try:
-            return cls.INTERNED[encoded]
-        except KeyError:
-            return cls._decode(encoded)
-
-    ## By default, the constructor would set self.kind to the first
-    ## argument given.  Do nothing, initialization happens in make().
-
-    def __init__(self, encoded):
-        pass
+@abc.implements(tree.Node)
+class Item(content('Item')):
 
     def __repr__(self):
-        return '%s(%r)' % (type(self).__name__, str(self))
+        return '%s(name=%r)' % (type(self).__name__, self.name)
 
-    def __str__(self):
-        if self._encoded is None:
-            self._encoded = self._encode()
-        return self._encoded
+    def __leaf__(self):
+        return True
 
-    ## Most of the time, a Key is treated opaquely.  Use its string
-    ## representation for hashing and equality.
+    @property
+    def parent(self):
+        return api.get(self.folder)
 
-    def __hash__(self):
-        return hash(str(self))
+@abc.implements(tree.InnerNode)
+class Folder(content('Folder')):
 
-    def __eq__(self, other):
-        if isinstance(other, Key):
-            return (self.kind == other.kind and self.id == other.id)
-        elif isinstance(other, basestring):
-            return str(self) == other
-        return NotImplemented
+    def __init__(self, **kw):
+        kw['contents'] = omap(kw.get('contents', {}))
+        super(Folder, self).__init__(**kw)
 
-    def __ne__(self, other):
-        if isinstance(other, (basestring, Key)):
-            return not self == other
-        return NotImplemented
+    def __nonzero__(self):
+        return True
 
-    ## Since Keys are interned, copying is a no-op.
+    def __len__(self):
+        return len(self.contents)
 
-    def __copy__(self):
+    def __contains__(self, name):
+        return name in self.contents
+
+    ## FIXME: api.get() doesn't return multiple keys in request-order.
+    ## Look into doing something about this.  For now, workaround by
+    ## calling api.get() on individual keys.
+
+    def __iter__(self):
+        return (api.get(k) for k in self.contents.itervalues())
+
+    def __leaf__(self):
+        return False
+
+    def before(self, item):
+        return (api.get(k) for k in self.contents.itervalues(item.name))
+
+    def after(self, item):
+        seq = self.contents.itervalues(item.name, None)
+        # The sequence begins with item; skip it.
+        return (api.get(k) for k in next(seq, None))
+
+    def child(self, name, default=None):
+        key = self.contents.get(name)
+        return api.get(key) if key else default
+
+    def add(self, item):
+        if item.name in self:
+            raise ValueError('Child already exists: %r.' % item.name)
+        elif item.folder:
+            raise ValueError('Child already in folder: %r' % item.parent)
+        self.contents[item.name] = item.key
+        item.folder = self.key
         return self
 
-    def __deepcopy__(self, memo):
+    def remove(self, item):
+        if self.contents.get(item.name) == item.key:
+            del self.contents[item.name]
+            item.folder = None
         return self
 
-    @classmethod
-    def __adapt__(cls, obj):
-        if isinstance(obj, basestring):
-            return cls(obj)
-        obj = super(Key).__adapt__(obj)
-        return obj and obj._intern()
+class Site(content('Site')):
+    pass
 
-    ## Creating a Key directly is unusual, so make() is a second-class
-    ## constructor
+class Subdomain(content('Subdomain')):
+    pass
 
-    @classmethod
-    def make(cls, kind, id=None):
-        self = object.__new__(cls)
-        self.kind = avro.string(kind)
-        self.id = avro.string(id) if id else _uuid(uuid.uuid4().bytes)
-        return self._intern()
-
-    def _intern(self):
-        self._encoded = None
-        return self.INTERNED.setdefault(str(self), self)
-
-    ## Use a base64 encoded binary Avro value as the opaque
-    ## representation.
-
-    @staticmethod
-    def _decode(enc):
-        pad = len(enc) % 4
-        enc = str(enc) + '=' * (4 - pad) if pad else enc
-        data = base64.urlsafe_b64decode(enc)
-        return avro.loads_binary(data, unbox=None, header=False)
-
-    def _encode(self):
-        data = avro.dumps_binary(self, box=None, header=False)
-        return base64.urlsafe_b64encode(data).rstrip('=')
-
-class _uuid(avro.fixed('M.uuid')):
-    """The id field of most keys is a uuid."""
+class Page(content('Page')):
+    pass

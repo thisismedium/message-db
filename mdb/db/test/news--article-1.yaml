@@ -1,0 +1,4 @@
+kind: M.Page
+description: This is the first news article.
+content:  
+  <p>Read the news!</p>

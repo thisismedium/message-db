@@ -42,6 +42,10 @@ class Item(models.Model):
     title = types.StringProperty()
     folder = types.ReferenceProperty('Item')
 
+    @property
+    def parent(self):
+        return api.get(self.folder)
+
 @abc.implements(tree.InnerNode)
 class Folder(Item):
     contents = types.DirectoryProperty(Item)
@@ -76,9 +80,9 @@ class Folder(Item):
         if item.name in self:
             raise ValueError('Child already exists: %r.' % item.name)
         elif item.folder:
-            raise ValueError('Child already in folder: %r' % item.folder)
+            raise ValueError('Child already in folder: %r' % item.parent)
         self.contents[item.name] = item
-        item.folder = self
+        item.folder = self.key
         return self
 
     def remove(self, item):
@@ -111,7 +115,7 @@ def add_child(folder, child):
 def remove(child):
     if child == root():
         raise ValueError('Cannot remove the root item.')
-    folder = child.folder
+    folder = child.parent
     folder.remove(child)
     api._delete(list(tree.orself(child, tree.descend)))
     return folder
