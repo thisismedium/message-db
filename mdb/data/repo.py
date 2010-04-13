@@ -330,9 +330,9 @@ avro.require('repo.json')
 class Branch(avro.structure('M.branch')):
     """Branch configuration is stored in the repository."""
 
-BranchMap = avro.mapping(Branch)
+BranchMap = avro.map(Branch)
 
-BranchConfig = avro.mapping(avro.string)
+BranchConfig = avro.map(avro.string)
 
 ## The main purpose of a zipper is to make a "logical" key/value space
 ## over a shared "static" space.  It does this by keeping a mapping of
@@ -439,9 +439,9 @@ message = fluid.accessor(MESSAGE)
 ## checkpoints use changesets.  A manifest is a complete snapshot of
 ## the space; a changeset is a delta.
 
-manifest = avro.mapping(sref)
+manifest = avro.map(sref)
 
-changeset = avro.mapping(sref)
+changeset = avro.map(sref)
 
 ## Since a changeset is a delta against a manifest, the sentinal
 ## Deleted is used to shadow an item that has been removed.
