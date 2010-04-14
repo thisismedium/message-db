@@ -100,6 +100,9 @@ class Key(avro.structure('M.key', weak=True)):
             self._encoded = self._encode()
         return self._encoded
 
+    def __json__(self):
+        return str(self)
+
     ## Most of the time, a Key is treated opaquely.  Use its string
     ## representation for hashing and equality.
 

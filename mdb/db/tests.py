@@ -89,6 +89,9 @@ class TestQuery(unittest.TestCase):
                     (Page, 'about'), (Page, 'article-1'),
                     (Page, 'article-2'), (Page, 'article-3'))
 
+    def test_ops(self):
+        self._check('get(%r)' % str(self.root.key), (Site, 'test'))
+
     def _check(self, path, *result):
         self.assertEqual(tuple((type(r), r.name) for r in query(path)), result)
 

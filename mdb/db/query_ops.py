@@ -8,7 +8,7 @@
 ## entirely into the global path evaluation context.
 
 from __future__ import absolute_import
-from . import _tree
+from . import _tree, api as _api
 
 ## Support query_ast.NamedTest
 def kind(name):
@@ -18,5 +18,4 @@ def get(*keys):
     """Abandon the current context; produce a sequence of items
     associated with the given keys."""
 
-    ## FIXME: this looks broken.  Make a unit test!
-    return _ds.get([k for f in keys for k in f])
+    return _api.get([k for f in keys for k in f])

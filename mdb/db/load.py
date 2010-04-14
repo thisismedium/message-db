@@ -4,7 +4,7 @@
 """load -- bootstrap a datastore"""
 
 from __future__ import absolute_import
-import os, glob, yaml
+import os
 from md.prelude import *
 from .. import data
 from . import tree, api
@@ -30,6 +30,8 @@ def fsdir(base, app_id):
 ### Import
 
 def load_yaml(path):
+    import yaml, glob
+
     with api.delta('Imported %r.' % path) as delta:
         root = _root(os.path.basename(path))
 
