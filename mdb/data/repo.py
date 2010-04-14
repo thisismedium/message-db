@@ -443,6 +443,10 @@ manifest = avro.map(sref)
 
 changeset = avro.map(sref)
 
+## Each checkpoint or commit refers to previous ones.
+
+previous = avro.array(sref)
+
 ## Since a changeset is a delta against a manifest, the sentinal
 ## Deleted is used to shadow an item that has been removed.
 
