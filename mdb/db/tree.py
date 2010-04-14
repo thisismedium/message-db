@@ -14,7 +14,7 @@ from ._tree import *; from ._tree import content
 __all__ = _tree.__all__ + (
     'Item', 'Folder', 'Site', 'Subdomain', 'Page',
     'root', 'query', 'path', 'resolve',
-    'make', 'add', 'remove'
+    'make', 'add', 'save', 'remove'
 )
 
 
@@ -153,13 +153,15 @@ def make(cls, **kw):
     return add(folder, item) if folder else item
 
 def add(folder, item):
-    folder.add(item)
-    return item
+    return api.branch().changed(folder.add(item), item)
+
+def save(item, *args, **kw):
+    return api.branch().changed(item.update(*args, **kw))
 
 def remove(child):
     if child == root():
         raise ValueError('Cannot remove the root item.')
-    folder = child.parent.remove(child)
+    folder = api.branch().changed(child.parent.remove(child))
     api._delete(list(walk(child)))
     return folder
 

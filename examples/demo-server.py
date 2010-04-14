@@ -63,7 +63,7 @@ class QueryServer(xmpp.Plugin):
         yield folder
 
     def set_item_save(self, data):
-        yield db.resolve(data['_path']).update(without_underscores(data))
+        yield db.save(db.resolve(data['_path']), without_underscores(data))
 
     def set_item_remove(self, data):
         yield db.remove(db.resolve(data['_path']))
