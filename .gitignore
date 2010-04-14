@@ -6,3 +6,4 @@ parsetab.py
 .#*
 _lextab.py
 _parsetab.py
+twistd.log

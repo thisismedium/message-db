@@ -88,7 +88,8 @@ class _Delta(object):
         self._mark = mark
 
     def new(self, cls, state):
-        key = _tree.Key.make(cls.__kind__, state.pop('key_name', None))
+        key = (state.pop('key', None)
+               or _tree.Key.make(cls.__kind__, state.pop('key_name', None)))
         obj = cls(**state).update(_key=key)
         self._data[str(key)] = obj
         return obj

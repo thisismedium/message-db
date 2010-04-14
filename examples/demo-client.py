@@ -6,8 +6,14 @@ Example:
 
 ## In one terminal:
 > python demo-server.py
+
 ## In another terminal:
-> python demo-client.py item '*'
+> python demo-client.py get-item '*'
+> python demo-client.py set-item '[{ "method": "create", "data": { "_kind": "M.Page", "_path": "/example" } }]'
+> python demo-client.py set-item '[{ "method": "save", "data": { "_path": "/example", "title": "Hello, world!" } }]'
+> python demo-client.py get-item '*'
+> python demo-client.py set-item '[{ "method": "remove", "data": { "_path": "/example" } }]'
+> python demo-client.py get-item '*'
 """
 
 import os, sys, xmpp, socket, base64

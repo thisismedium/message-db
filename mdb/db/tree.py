@@ -29,6 +29,12 @@ class Item(content('Item')):
     def __leaf__(self):
         return True
 
+    def __json__(self):
+        return update(self.__getstate__(),
+                      _kind=self.kind,
+                      _key=self.key,
+                      _path=path(self))
+
     @property
     def parent(self):
         return api.get(self.folder)

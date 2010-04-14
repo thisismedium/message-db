@@ -76,6 +76,15 @@ class RecordType(type):
 
     __json__ = __getstate__
 
+    @property
+    def __fields__(cls):
+        try:
+            return cls.__fields
+        except AttributeError:
+            fields = cls.__schema__.fields
+            cls.__fields = omap((f.name, types.from_schema(f)) for f in fields)
+            return cls.__fields
+
 class Structure(object):
     __metaclass__ = RecordType
     __abstact__ = True

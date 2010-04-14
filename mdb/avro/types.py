@@ -183,8 +183,10 @@ class Fixed(str):
 
     @classmethod
     def __adapt__(cls, value):
-        if isinstance(value, basestring):
+        if isinstance(value, basestring) and len(value) == cls.__schema__.size:
             return cls(value)
+
+
 
 
 ### Complex Types

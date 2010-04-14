@@ -23,6 +23,7 @@ class TestTree(unittest.TestCase):
         self.assertEqual(self.root.name, 'test')
         self.assertEqual(type(self.root.contents), _tree._content)
         self.assertEqual(self.root.contents.keys(), ['about', 'news'])
+        self.assertEqual(str(self.root.key), str(self.root.child('about').folder))
 
     def test_structure(self):
         self.assertEqual(self._structure(self.root),

@@ -18,16 +18,15 @@ def usage():
     sys.exit(1)
 
 def main(data, expr):
-    top = db.setup(data, os.path.basename(data))
-    query = db.query(expr)
+    db.load.fsdir(data, os.path.basename(data))
     print 'Result of %r:' % expr
-    result = query(top)
+    result = db.query(expr)
     if isinstance(result, tuple):
         for seq in result:
             for item in seq:
                 print '    %r' % (item,)
     else:
-        for item in query(top):
+        for item in result:
             print '    %r' % (item,)
 
 if __name__ == '__main__':

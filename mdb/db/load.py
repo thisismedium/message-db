@@ -43,7 +43,7 @@ def load_yaml(path):
     return root
 
 def _root(name):
-    return tree.make(tree.Site, name=name, key_name='root')
+    return tree.make(tree.Site, name=name, key=tree.ROOT)
 
 def _item(root, name, data):
     cls = tree.get_type(data.pop('kind', 'Item'))

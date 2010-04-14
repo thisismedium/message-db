@@ -8,13 +8,13 @@ is received the query is evaluated against the root of the content
 tree and matching items are returned in a JSON format.
 """
 
-import os, sys, json, xmpp, base64, hashlib, logging
+import os, sys, xmpp, base64, hashlib, logging
 from md import collections as coll
 from xmpp import xml
-from mdb import db
+from mdb import db, avro
 
 def main(data):
-    top = db.setup(data, os.path.basename(data))
+    top = db.load.fsdir(data, os.path.basename(data))
     server = xmpp.Server({
         'plugins': [(QueryServer, { 'root': top })],
         'users': { 'user': 'secret' },
@@ -37,33 +37,36 @@ class QueryServer(xmpp.Plugin):
         return self._dispatch(iq)
 
     def get_item(self, iq, query):
-        return self._dumps(iq, db.query(query)(self.root))
+        return self._dumps(iq, db.query(query, self.root))
 
     def set_item(self, iq, data):
         result = coll.omap()
-        with db.transaction(iq[0].get('message', 'set items')):
+        with db.delta(iq[0].get('message', 'set items')) as delta:
             for action in loads(data):
                 method = getattr(self, 'set_item_%s' % action['method'], None)
                 if not method:
                     raise ValueError('Bad action: %r.' % action)
-                res = method(action['data'])
-                result.setdefault(res.key, res)
+                for affected in method(action['data']):
+                    result.setdefault(affected.key, affected)
+            delta.checkpoint()
         return self._dumps(iq, result.values())
 
-    def set_item_create(self, item):
-        path = item['_path']; kind = db.model(item['_kind'])
-        attr = dict(without_underscores(item))
+    def set_item_create(self, data):
+        path = data['_path']
+        kind = db.get_type(data['_kind'])
+
+        attr = dict(without_underscores(data))
         attr.setdefault('name', os.path.basename(path))
-        return db.add_child(
-            db.resolve(os.path.dirname(path)),
-            kind(**attr)
-        )
 
-    def set_item_save(self, item):
-        return db.resolve(item['_path']).update(without_underscores(item))
+        folder = db.resolve(os.path.dirname(path))
+        yield db.make(kind, folder=folder, **attr)
+        yield folder
 
-    def set_item_remove(self, item):
-        return db.remove(db.resolve(item['_path']))
+    def set_item_save(self, data):
+        yield db.resolve(data['_path']).update(without_underscores(data))
+
+    def set_item_remove(self, data):
+        yield db.remove(db.resolve(data['_path']))
 
     @xmpp.iq('{urn:M}query')
     def M_query(self, iq):
@@ -74,7 +77,7 @@ class QueryServer(xmpp.Plugin):
         return self._dispatch(iq)
 
     def get_schema(self, iq, name):
-        result = dumps(db.model(name))
+        result = dumps(db.get_type(name))
         match = hashlib.md5(result).hexdigest()
         return self._result(iq, result, match=match)
 
@@ -118,55 +121,15 @@ def without_underscores(value):
     return ((str(k), v) for (k, v) in value.iteritems() if not k.startswith('_'))
 
 def loads(data):
-    return json.loads(data)
+    return avro.json.loads(data)
 
 def dumps(obj):
-    return json.dumps(dumps_value(obj))
+    return avro.dumps(state(obj))
 
-def dumps_value(obj, rec=None):
-    if isinstance(obj, (type(None), bool, int, float, basestring)):
-        return obj
-    elif isinstance(obj, type):
-        if issubclass(obj, db.Model):
-            return dumps_model(obj)
-        else:
-            return obj.__name__
-    elif isinstance(obj, db.Item):
-        return dumps_item(obj)
-    elif isinstance(obj, db.Key):
-        return str(obj)
-    elif isinstance(obj, (coll.Sequence, coll.Iterator)):
-        return map(rec or dumps_value, obj)
-    elif isinstance(obj, (coll.Tree, coll.OrderedMap)):
-        return [map(rec or dumps_value, i) for i in obj.iteritems()]
+def state(obj, rec=None):
+    if isinstance(obj, coll.Iterator):
+        return map(rec or state, obj)
     return obj
-
-def dumps_item(obj):
-    return dict(
-        ((n, dumps_property(v)) for (n, v) in db.describe(obj)),
-        _kind=obj.kind,
-        _key=str(obj.key),
-        _path=db.path(obj)
-    )
-
-def dumps_property(value):
-    if isinstance(value, db.Item):
-        value = value.key
-    return dumps_value(value, dumps_property)
-
-def dumps_model(value):
-    return {
-        'type': 'record',
-        'name': value.kind,
-        'fields': list(
-            dict(
-                (dumps_value(k), (dumps_value(v)))
-                for (k, v) in db.describe(p)
-                if v
-            )
-            for p in db.properties(value).itervalues()
-        )
-    }
 
 if __name__ == '__main__':
     main(os.path.join(os.path.dirname(__file__), 'demo'))

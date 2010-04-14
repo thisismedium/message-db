@@ -43,8 +43,21 @@ class Content(avro.Structure):
             raise TypeError('%r does not support extra properties: %r.')
 
     @property
+    def kind(self):
+        return self.__kind__
+
+    @property
     def key(self):
         return self._key
+
+    def update(self, seq=(), **kw):
+        fields = type(self).__fields__
+        for key, val in chain_items(seq, kw):
+            cls = fields.get(key)
+            if cls is not None:
+                val = avro.cast(val, cls)
+            setattr(self, key, val)
+        return self
 
 
 ### Key
@@ -143,7 +156,7 @@ class Key(avro.structure('M.key', weak=True)):
     def make(cls, kind, id=None):
         self = object.__new__(cls)
         self.kind = avro.string(type_name(kind))
-        self.id = avro.string(id) if id else _uuid(uuid.uuid4().bytes)
+        self.id = avro.cast(id, _id) if id else _uuid(uuid.uuid4().bytes)
         return self._intern()
 
     def _intern(self):
