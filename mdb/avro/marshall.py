@@ -214,11 +214,6 @@ class DatumReader(io.DatumReader):
         else:
             raise _s.AvroException('Unknown type: %r.' % writers_schema.type)
 
-    def read_record(self, writers_schema, readers_schema, decoder):
-        cls = types.get_type(types.type_name(writers_schema))
-        val = super(DatumReader, self).read_record(writers_schema, readers_schema, decoder)
-        return types.cast(val, cls)
-
     def read_map(self, ws, *args):
         return types.from_schema(ws)(self._map(ws, *args))
 
