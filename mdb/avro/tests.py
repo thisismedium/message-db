@@ -178,43 +178,60 @@ class TestTypes(unittest.TestCase):
                            '\x02\x00\x12Test.uuid' + value)
 
     def test_box(self):
-        self.expect(self.Box(None), '\x02\x00\x10Test.Box\x00')
+        self.expect(self.Box(None),
+                    '\x02\x00\x10Test.Box\x00',
+                    '{"value": null}')
 
         self.expect(self.Box(self.uuid('1234567890123456')),
-                    '\x02\x00\x10Test.Box\x021234567890123456')
+                    '\x02\x00\x10Test.Box\x021234567890123456',
+                    '{"value": "1234567890123456"}')
 
         self.expect(self.Box(self.Pointer("foo")),
-                    '\x02\x00\x10Test.Box\x04\x06foo')
+                    '\x02\x00\x10Test.Box\x04\x06foo',
+                    '{"value": {"address": "foo"}}')
 
     def test_itree(self):
         return self.expect(self.ITree(a=1, b=2),
-                           '\x02\x00\x10map<int>\x04\x02a\x02\x02b\x04\x00')
+                           '\x02\x00\x10map<int>\x04\x02a\x02\x02b\x04\x00',
+                           '{"a": 1, "b": 2}')
 
     def test_oitree(self):
         return self.expect(self.OIMap([('c', 1), ('a', 2), ('b', 3)]),
-                           '\x02\x00\x12omap<int>\x06\x02c\x02\x02a\x04\x02b\x06\x00')
+                           '\x02\x00\x12omap<int>\x06\x02c\x02\x02a\x04\x02b\x06\x00',
+                           '[["c", 1], ["a", 2], ["b", 3]]')
 
     def test_ptree(self):
         return self.expect(self.PTree(a=self.Pointer('alpha'), b=self.Pointer('beta')),
-                           '\x02\x00\x22map<Test.Pointer>\x04\x02a\nalpha\x02b\x08beta\x00')
+                           '\x02\x00\x22map<Test.Pointer>\x04\x02a\nalpha\x02b\x08beta\x00',
+                           '{"a": {"address": "alpha"}, "b": {"address": "beta"}}')
 
     def test_iarray(self):
         return self.expect(self.IArray([1, 2]),
-                           '\x02\x00\x14array<int>\x04\x02\x04\x00')
+                           '\x02\x00\x14array<int>\x04\x02\x04\x00',
+                           '[1, 2]')
 
     def test_parray(self):
         t1 = self.PTree(a=self.Pointer('alpha'))
         t2 = self.PTree(b=self.Pointer('beta'))
         self.expect(self.PArray([t1, t2]),
-                    '\x02\x000array<map<Test.Pointer>>\x04\x02\x02a\nalpha\x00\x02\x02b\x08beta\x00\x00')
+                    '\x02\x000array<map<Test.Pointer>>\x04\x02\x02a\nalpha\x00\x02\x02b\x08beta\x00\x00',
+                    '[{"a": {"address": "alpha"}}, {"b": {"address": "beta"}}]')
 
-    def expect(self, val, data):
+    def expect(self, val, data, json=None):
         dumped = dumps_binary(val)
         self.assertEqual(dumped, data)
 
         obj = loads_binary(dumped)
         self.assertEqual(type(obj), type(val))
         self.assertEqual(obj, val)
+
+        if json is not None:
+            dumped = dumps(val)
+            self.assertEqual(dumped, json)
+            obj = loads(dumped, type(val))
+            self.assertEqual(type(obj), type(val))
+            self.assertEqual(obj, val)
+
 
 INHERIT = """
 {

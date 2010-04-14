@@ -4,7 +4,7 @@
 """marshall -- dump or load Avro data"""
 
 from __future__ import absolute_import
-import zlib, cStringIO
+import json, zlib, cStringIO
 from avro import io, schema as _s
 from md.prelude import *
 from . import types
@@ -18,16 +18,10 @@ __all__ = (
 
 ### JSON
 
-try:
-    ## Try to use simplejson because that's what Avro uses.
-    import simplejson as json
-except ImportError:
-    import json
-
 def dumps(obj):
     """Serialize an object to a JSON string."""
 
-    return json.dumps(getstate(obj), sort_keys=True, default=json_default)
+    return _encoder.encode(obj)
 
 def loads(data, cls):
     """Unserialize and object from a JSON string.  The second argument
@@ -35,11 +29,27 @@ def loads(data, cls):
 
     return types.cast(json.loads(data), cls)
 
-def json_default(obj):
-    state = getstate(obj)
-    if state is obj:
-        raise TypeError('%r is not JSON serializable' % (obj,))
-    return state
+class JSONEncoder(json.JSONEncoder):
+
+    def _iterencode(self, obj, markers=None):
+        to_json = getattr(type(obj), '__json__', None)
+        if to_json:
+            obj = to_json(obj)
+
+        if isinstance(obj, Iterator):
+            return self._iterencode_list(obj, markers)
+        return super(JSONEncoder, self)._iterencode(obj, markers)
+
+_encoder = JSONEncoder(
+    skipkeys=False,
+    ensure_ascii=True,
+    check_circular=True,
+    allow_nan=True,
+    indent=None,
+    separators=None,
+    encoding='utf-8',
+    sort_keys=True
+)
 
 
 ### Binary

@@ -183,7 +183,7 @@ class Fixed(str):
 
     @classmethod
     def __adapt__(cls, value):
-        if isinstance(value, str):
+        if isinstance(value, basestring):
             return cls(value)
 
 
@@ -204,12 +204,27 @@ def complex_name(kind, *values):
 ## the same value.
 
 def map(values):
-    return mapping(complex_name('map', values), tree, values, _s.MapSchema)
+    return mapping(complex_name('map', values), Map, values, _s.MapSchema)
 
-_omap = omap
+def adapt_map(cls, obj):
+    if isinstance(obj, Mapping):
+        obj = obj.iteritems()
+    if not isinstance(obj, basestring) and isinstance(obj, Iterable):
+        values = cls.type
+        return cls((k, cast(v, values)) for (k, v) in obj)
+
+class Map(tree):
+    __adapt__ = classmethod(adapt_map)
+
+class OMap(omap):
+
+    __adapt__ = classmethod(adapt_map)
+
+    def __json__(self):
+        return self.iteritems()
 
 def omap(values):
-    return mapping(complex_name('omap', values), _omap, values, OMapSchema)
+    return mapping(complex_name('omap', values), OMap, values, OMapSchema)
 
 def mapping(kind, base, values, schema):
     try:
@@ -253,8 +268,9 @@ class Array(list):
 
     @classmethod
     def __adapt__(cls, obj):
-        if isinstance(obj, Iterable):
-            return cls(obj)
+        if not isinstance(obj, basestring) and isinstance(obj, Iterable):
+            items = cls.type
+            return cls(cast(v, items) for v in obj)
 
 def array_schema(items):
     schema = _s.ArraySchema('null', SCHEMATA)

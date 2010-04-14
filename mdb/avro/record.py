@@ -74,6 +74,8 @@ class RecordType(type):
     def __getstate__(cls):
         return marshall.json.loads(str(cls.__schema__))
 
+    __json__ = __getstate__
+
 class Structure(object):
     __metaclass__ = RecordType
     __abstact__ = True
@@ -104,6 +106,9 @@ class Structure(object):
         return NotImplemented
 
     ## Serialization
+
+    def __json__(self):
+        return self.__getstate__()
 
     def __getstate__(self):
         return dict((n, getattr(self, n)) for n in self.__all__)
