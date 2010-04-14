@@ -27,10 +27,22 @@ cast = adapt
 ## used in various places, especially by marshall, to map type names
 ## to Python types or visa versa.
 
+DEFAULT_NS = 'M.'
+
+def qualified(name):
+    if '.' not in name:
+        name = DEFAULT_NS + name
+    return name
+
+def unqualified(name):
+    if name.startswith(DEFAULT_NS):
+        name = name[len(DEFAULT_NS):]
+    return name
+
 def declare(type):
     """Add a new type to the global type namespace."""
 
-    key = type_name(type)
+    key = type_name(type, True)
     if TYPES.setdefault(key, type) is not type:
         raise TypeError('Type %r has already been declared.' % key)
     return type
@@ -38,12 +50,12 @@ def declare(type):
 def get_type(name):
     """Get a type by name."""
 
-    probe = TYPES.get(name)
+    probe = TYPES.get(name) or TYPES.get(qualified(name))
     if probe is None:
         raise NameError('Undefiend type: %r.' % name)
     return probe
 
-def type_name(type):
+def type_name(type, qualified=False):
     """Get a type's name."""
 
     if type is None:
@@ -56,16 +68,18 @@ def type_name(type):
     ## FIXME: do something better than this ugly while loop.
     while isinstance(type, (_s.Schema, _s.Field)):
         if isinstance(type, _s.NamedSchema):
-            return type.fullname
+            name = type.fullname
+            return name if qualified else unqualified(name)
         elif isinstance(type, _s.ArraySchema):
             return complex_name(type.type, type.items)
         elif isinstance(type, _s.MapSchema):
             return complex_name(type.type, type.values)
         elif isinstance(type, _s.UnionSchema):
-            return complex_name(type.type, *[type_name(s) for s in type.schemas])
+            return complex_name(type.type, *[type_name(s, True) for s in type.schemas])
         type = type.type
 
-    return getattr(type, '__kind__', None) or getattr(type, '__name__', type)
+    name = getattr(type, '__kind__', None) or getattr(type, '__name__', type)
+    return name if qualified else unqualified(name)
 
 ## The Avro implementation uses Schema objects to arbitrate
 ## validation, reading and writing.
@@ -196,7 +210,7 @@ class Fixed(str):
 ## types and to box serialized data.
 
 def complex_name(kind, *values):
-    return '%s<%s>' % (kind, ', '.join(type_name(v) for v in values))
+    return '%s<%s>' % (kind, ', '.join(type_name(v, True) for v in values))
 
 ## The keys for mapping types must be strings.  A tree is used as a
 ## base type to ensure the keys are kept in a consistent order.  This
@@ -261,7 +275,7 @@ def array(items):
     except NameError:
         return declare(type(kind, (Array, ), {
             'type': items,
-            '__module__': '__name__',
+            '__module__': __name__,
             '__kind__': kind,
             '__schema__': array_schema(items)
         }))
@@ -287,8 +301,8 @@ def union(*types):
         return get_type(kind)
     except NameError:
         return declare(type(kind, (Union, ), {
-            'type': types,
-            '__module__': '__name__',
+            'type': tuple(type(None) if t is None else t for t in types),
+            '__module__': __name__,
             '__kind__': kind,
             '__schema__': union_schema(types)
         }))
@@ -303,7 +317,7 @@ class Union(object):
         for kind in cls.type:
             try:
                 return cast(val, kind)
-            except AdaptationFailure:
+            except AdaptationFailure as exc:
                 pass
 
 def union_schema(types):

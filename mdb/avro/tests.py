@@ -74,11 +74,6 @@ class TestExternalSchema(unittest.TestCase):
         self.assertEqual(item, types.get_schema('Test.Item'))
         self.assertEqual(str(item), '{"type": "record", "namespace": "Test", "name": "Item", "fields": [{"type": "string", "name": "title"}, {"type": "string", "name": "content"}]}')
 
-    def test_name(self):
-        schema.load(SCHEMA)
-        self.assertEqual(type_name(types.get_schema('Test.Link')),
-                         'Test.Link')
-
 ## A structure is a simple Python type for an Avro record.  Make sure
 ## they are well-behaved Python types and marshall correctly.  See
 ## record.py
@@ -234,31 +229,36 @@ class TestTypes(unittest.TestCase):
 
 
 INHERIT = """
+{ "type": "string", "name": "M.text" }
+
+{ "type": "string", "name": "M.key" }
+
 {
     "type": "record",
-    "name": "Test.Item",
+    "name": "M.Item",
     "fields": [
         { "name": "name", "type": "string" },
         { "name": "title", "type": "string" },
-        { "name": "folder", "type": "string" }
+        { "name": "folder", "type": ["M.key", "null"] },
+        { "name": "description", "type": "M.text" }
     ]
 }
 
 {
     "type": "record",
-    "name": "Test.Folder",
-    "base": "Test.Item",
+    "name": "M.Folder",
+    "base": "M.Item",
     "fields": [
         { "name": "default_name", "type": "string" },
-        { "name": "title", "type": "string" },
-        { "name": "contents", "type": { "type": "omap", "values": "int" } }
+        { "name": "description", "type": "M.text" },
+        { "name": "contents", "type": { "type": "omap", "values": "M.key" } }
     ]
 }
 
 {
     "type": "record",
-    "name": "Test.Site",
-    "base": "Test.Folder"
+    "name": "M.Site",
+    "base": "M.Folder"
 }
 """
 
@@ -268,13 +268,13 @@ class TestInherit(unittest.TestCase):
         schema.clear()
         schema.load(INHERIT)
 
-        class Item(structure('Test.Item')):
+        class Item(structure('M.Item')):
             pass
 
-        class Folder(structure('Test.Folder')):
+        class Folder(structure('M.Folder')):
             pass
 
-        class Site(structure('Test.Site')):
+        class Site(structure('M.Site')):
             pass
 
         self.Item = Item
@@ -287,14 +287,16 @@ class TestInherit(unittest.TestCase):
 
     def test_fields(self):
         self.assertEqual([f.name for f in types.to_schema(self.Item).fields],
-                         ['name', 'title', 'folder'])
+                         ['name', 'title', 'folder', 'description'])
 
         self.assertEqual([f.name for f in types.to_schema(self.Folder).fields],
-                         ['name', 'folder', 'default_name', 'title', 'contents'])
+                         ['name', 'title', 'folder', 'default_name', 'description', 'contents'])
 
         self.assertEqual([f.name for f in types.to_schema(self.Site).fields],
-                         ['name', 'folder', 'default_name', 'title', 'contents'])
+                         ['name', 'title', 'folder', 'default_name', 'description', 'contents'])
 
-
+    def test_json_schema(self):
+        self.assertEqual(dumps(self.Folder),
+                         '{"base": "Item", "fields": [{"name": "name", "type": "string"}, {"name": "title", "type": "string"}, {"name": "folder", "type": ["key", "null"]}, {"name": "default_name", "type": "string"}, {"name": "description", "type": "text"}, {"name": "contents", "type": {"type": "omap", "values": "key"}}], "name": "Folder", "namespace": "M", "type": "record"}')
 
 

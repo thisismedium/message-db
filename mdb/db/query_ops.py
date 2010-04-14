@@ -12,7 +12,7 @@ from . import _tree, api as _api
 
 ## Support query_ast.NamedTest
 def kind(name):
-    return _tree.get_type('M.%s' % name)
+    return _tree.get_type(name)
 
 def get(*keys):
     """Abandon the current context; produce a sequence of items

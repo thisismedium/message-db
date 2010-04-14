@@ -6,6 +6,7 @@
 from __future__ import absolute_import
 import os, unittest
 from md.prelude import *
+from .. import avro
 from . import *; from . import _tree
 
 def load():
@@ -18,6 +19,13 @@ class TestTree(unittest.TestCase):
 
     def setUp(self):
         self.root = load()
+
+    def test_key(self):
+        key = self.root.key
+        data = unicode(self.root.key)
+        self.assertEqual(avro.cast(data, Key), key)
+        self.assertEqual(avro.cast(data, _tree._folder), key)
+
 
     def test_root(self):
         self.assertEqual(self.root.name, 'test')

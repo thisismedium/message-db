@@ -51,6 +51,7 @@ class RecordType(type):
 
         cls = type.__new__(mcls, name, bases, attr)
         cls.__all__ = tuple(coll.slots(cls))
+        cls.__name__ = types.type_name(cls)
 
         if not abstract:
             types.declare(cls)
@@ -74,7 +75,12 @@ class RecordType(type):
     def __getstate__(cls):
         return marshall.json.loads(str(cls.__schema__))
 
-    __json__ = __getstate__
+    def __json__(cls):
+        try:
+            return cls.__json
+        except AttributeError:
+            cls.__json = unqualify_schema(type(cls).__getstate__(cls))
+            return cls.__json
 
     @property
     def __fields__(cls):
@@ -84,6 +90,23 @@ class RecordType(type):
             fields = cls.__schema__.fields
             cls.__fields = omap((f.name, types.from_schema(f)) for f in fields)
             return cls.__fields
+
+def unqualify_schema(data):
+    """Hack around qualified names embedded in exported Avro schema."""
+
+    if isinstance(data, basestring):
+        return types.unqualified(data)
+    elif isinstance(data, list):
+        return map(unqualify_schema, data)
+    elif isinstance(data, dict):
+        for name in ('base', 'name', 'items', 'values'):
+            val = data.get(name)
+            if val:
+                data[name] = unqualify_schema(val)
+        fields = data.get('fields', ())
+        for field in fields:
+            field['type'] = unqualify_schema(field['type'])
+    return data
 
 class Structure(object):
     __metaclass__ = RecordType

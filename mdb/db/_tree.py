@@ -44,7 +44,7 @@ class Content(avro.Structure):
 
     @property
     def kind(self):
-        return self.__kind__
+        return type(self).__name__
 
     @property
     def key(self):
@@ -68,7 +68,7 @@ class Key(avro.structure('M.key', weak=True)):
     >>> k1 = Key.make('Foo')
     >>> k2 = Key.make('Foo')
     >>> k3 = Key.make('Foo', 'bar'); k3
-    Key('BkZvbwIGYmFy')
+    key('BkZvbwIGYmFy')
     >>> k1 is not k2
     True
     >>> k2 is Key(str(k2))
@@ -82,7 +82,7 @@ class Key(avro.structure('M.key', weak=True)):
     >>> k3.id
     u'bar'
     >>> avro.cast('BkZvbwIGYmFy', Key)
-    Key('BkZvbwIGYmFy')
+    key('BkZvbwIGYmFy')
     """
 
     __slots__ = ('_encoded', )
