@@ -18,10 +18,10 @@ __all__ = ('get_type', 'type_name', 'Key', 'text', 'html')
 
 get_type = avro.get_type
 
-def type_name(obj):
+def type_name(obj, *args, **kw):
     if isinstance(obj, basestring):
         return obj
-    return avro.type_name(obj)
+    return avro.type_name(obj, *args, **kw)
 
 ## Built-in types are declared in an external schema for now.  The
 ## record types defined in this package are principly focused on
@@ -161,14 +161,23 @@ class Key(avro.structure('M.key', weak=True)):
         elif isinstance(obj, dict):
             return cls.__restore__(obj)._intern()
 
+    ## Extra properties
+
+    @property
+    def type(self):
+        return get_type(self.kind)
+
     ## Creating a Key directly is unusual, so make() is a second-class
     ## constructor
 
     @classmethod
-    def make(cls, kind, id=None):
+    def make(cls, kind, id=None, name=None):
         self = object.__new__(cls)
-        self.kind = avro.string(type_name(kind))
-        self.id = avro.cast(id, _id) if id else _uuid(uuid.uuid4().bytes)
+        self.kind = avro.string(type_name(kind, True))
+        if name is not None:
+            self.id = avro.string(name)
+        else:
+            self.id = avro.cast(id, _id) if id else _uuid(uuid.uuid4().bytes)
         return self._intern()
 
     def _intern(self):

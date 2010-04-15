@@ -157,7 +157,7 @@ def make(cls, **kw):
         raise ValueError('Missing required title or name.')
 
     folder = kw.pop('folder', None)
-    item = api.branch().new(cls, update(
+    item = api.new(cls, update(
         kw,
         name=name,
         title=(kw.get('title', '').strip() or _title(name))
@@ -166,16 +166,16 @@ def make(cls, **kw):
     return add(folder, item) if folder else item
 
 def add(folder, item):
-    return api.branch().changed(folder.add(item), item)
+    return api.update(folder.add(item), item)
 
 def save(item, *args, **kw):
-    return api.branch().changed(item.update(*args, **kw))
+    return api.update(item.update(*args, **kw))
 
 def remove(child):
     if child == root():
         raise ValueError('Cannot remove the root item.')
-    folder = api.branch().changed(child.parent.remove(child))
-    api._delete(list(walk(child)))
+    folder = api.update(child.parent.remove(child))
+    api.delete(list(walk(child)))
     return folder
 
 SLUG = re.compile(r'[^a-z0-9]+')

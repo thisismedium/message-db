@@ -18,7 +18,7 @@ def usage():
     sys.exit(1)
 
 def main(data, expr):
-    db.load.fsdir(data, os.path.basename(data))
+    db.load.fsdir(os.path.basename(data), data)
     print 'Result of %r:' % expr
     result = db.query(expr)
     if isinstance(result, tuple):

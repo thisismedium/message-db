@@ -14,15 +14,17 @@ __all__ = ('memory', 'fsdir')
 
 ### Datastore Types
 
-def memory(base, app_id):
+def memory(app_id, base=None):
     """Create a datastore in memory.  Once a program
     terminates, the data is destroyed."""
 
     zs = data.zipper(data.back.memory())
     api.init(zs.create())
+    if not base:
+        return zs
     return load_yaml(base)
 
-def fsdir(base, app_id):
+def fsdir(app_id, base):
     """Create a datastore in the filesystem using a git-style
     object store format."""
 

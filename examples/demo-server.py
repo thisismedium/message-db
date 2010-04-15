@@ -14,7 +14,7 @@ from xmpp import xml
 from mdb import db, avro
 
 def main(data):
-    top = db.load.fsdir(data, os.path.basename(data))
+    top = db.load.fsdir(os.path.basename(data), data)
     server = xmpp.Server({
         'plugins': [(QueryServer, { 'root': top })],
         'users': { 'user': 'secret' },

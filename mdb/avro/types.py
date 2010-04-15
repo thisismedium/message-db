@@ -208,7 +208,7 @@ class Fixed(str):
 
     @classmethod
     def __adapt__(cls, value):
-        if isinstance(value, basestring) and len(value) == cls.__schema__.size:
+        if type(value) in (str, unicode) and len(value) == cls.__schema__.size:
             return cls(value)
 
 

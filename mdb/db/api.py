@@ -9,12 +9,12 @@ from md import fluid
 from .. import avro, data
 from . import _tree
 
-__all__ = ('branch', 'init', 'get', 'delta')
+__all__ = ('branch', 'init', 'get', 'find', 'new', 'update', 'delete', 'delta')
 
 ## The current branch is accessible in the dynamic context.  It can be
 ## set globally using the init() method.
 
-BRANCH = fluid.cell(None)
+BRANCH = fluid.cell(None, type=fluid.acquired)
 branch = fluid.accessor(BRANCH)
 
 def init(zs):
@@ -24,7 +24,7 @@ def init(zs):
     BRANCH.set(_Branch(zs.open()))
     return zs
 
-def get(key):
+def get(key, zs=None):
     """Resolve a key or sequence of keys.  If a key cannot be
     resolved, Undefined is returned.  Currently, the result of getting
     sequence of keys is not guaranteed to keep its objects in the
@@ -33,13 +33,26 @@ def get(key):
     if key is None or isinstance(key, _tree.Content):
         return key
     elif isinstance(key, (basestring, _tree.Key)):
-        return branch().get(str(key))
+        return (zs or branch()).get(str(key))
     else:
-        return branch().mget(str(k) for k in key)
+        return (zs or branch()).mget(str(k) for k in key)
 
-def _delete(key):
+def find(cls):
+    return branch().find(cls)
+
+
+### Changes
+
+def new(*args):
+    return branch().new(*args)
+
+def update(*args):
+    return branch().changed(*args)
+
+def delete(key):
     """A low-level method for deleting the item associated with a key.
-    Use tree.remove() instead."""
+    If you want to delete an item in the content tree, use
+    tree.remove() instead."""
 
     if isinstance(key, _tree.Content):
         key = key.key
@@ -48,9 +61,6 @@ def _delete(key):
     else:
         for k in key: branch().delete(k)
 
-
-### Changes
-
 ## A branch is updated transactionally by passing it a changeset.  The
 ## delta() method establishes a "shadow" branch in its dynamic extend
 ## that collects changes made to the content tree.  At the end of the
@@ -58,12 +68,12 @@ def _delete(key):
 ## to the branch.
 
 @contextmanager
-def delta(message):
+def delta(message, zs=None):
     """Replace the _Branch with a _Delta in the calling context.
     Methods that use branch() (such as get()) will use this delta
     instead."""
 
-    delta = branch().begin(message)
+    delta = (zs or branch()).begin(message)
     with branch(delta):
         yield delta
 
@@ -91,6 +101,14 @@ class _Branch(object):
             self._zs.end_transaction(mark, self._zs.checkpoint(changes))
         return self
 
+    def find(self, cls):
+        return get(self._scan(cls), self)
+
+    def _scan(self, cls):
+        for key in self._zs:
+            if issubclass(_tree.Key(key).type, cls):
+                yield key
+
     def _persist(self, delta):
         for key in delta:
             if delta[key] is Undefined:
@@ -109,7 +127,7 @@ class _Delta(object):
 
     def new(self, cls, state):
         key = (state.pop('key', None)
-               or _tree.Key.make(cls.__kind__, state.pop('key_name', None)))
+               or _tree.Key.make(cls, state.pop('key_name', None)))
         return self.changed(cls(**state).update(_key=key))
 
     def changed(self, *objects):
