@@ -87,10 +87,9 @@ def declare(defn):
 
 ## MONKEY PATCH!!!
 
-## Avro's make_avsc_object() is patched here to support named
-## primitive types and ordered maps.  A monkey patch is necesary
-## because this method is called recursively to generate Schema
-## objects.
+## Avro's make_avsc_object() is patched here to support extension
+## types.  A monkey patch is necesary because this method is called
+## recursively to generate Schema objects.
 
 _make_schema = _s.make_avsc_object
 
@@ -106,6 +105,8 @@ def make_schema(defn, names=None):
             return _s.PrimitiveSchema(type)
         elif type == 'omap':
             return types.OMapSchema(defn.get('values'), names)
+        elif type == 'set':
+            return types.SetSchema(defn.get('items'), names)
 
     return _make_schema(defn, names)
 

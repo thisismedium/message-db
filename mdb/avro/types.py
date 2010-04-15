@@ -12,7 +12,7 @@ __all__ = (
     'cast', 'get_type', 'type_name',
     'null', 'string', 'boolean', 'bytes', 'int', 'long', 'float', 'double',
     'primitive', 'fixed', 'union',
-    'map', 'omap', 'array'
+    'map', 'omap', 'array', 'set'
 )
 
 ## Support type casting using the Adaptation protocol.  The adapt()
@@ -284,31 +284,58 @@ class OMapSchema(_s.MapSchema):
         super(OMapSchema, self).__init__(values, names)
         self.set_prop('type', 'omap')
 
-## Arrays are implemented as lists.  The special base class allows
-## the reader to create the correct type of object with a cast().
+## A sequence is parameterized by the type of item it contains.
+## Arrays are part of the Avro spec; Sets are an extension.
 
 def array(items):
     kind = complex_name('array', items)
+    return sequence_type(kind, Array, items, _s.ArraySchema)
+
+def set(items):
+    kind = complex_name('set', items)
+    return sequence_type(kind, Set, items, SetSchema)
+
+def adapt_sequence(cls, obj):
+    if not isinstance(obj, basestring) and isinstance(obj, Iterable):
+        items = cls.type
+        return cls(cast(v, items) for v in obj)
+
+class Array(list):
+    __adapt__ = classmethod(adapt_sequence)
+
+class Set(__builtins__['set']):
+    __adapt__ = classmethod(adapt_sequence)
+
+    def __getstate__(self):
+        ## Sort here so the serialized representation is consistent
+        ## (the same reason to use trees instead of dicts).
+        return sorted(self)
+
+    def __setstate__(self, state):
+        self.update(state)
+
+    def __json__(self):
+        return self.__getstate__()
+
+class SetSchema(_s.ArraySchema):
+
+    def __init__(self, values, names=None):
+        super(SetSchema, self).__init__(values, names)
+        self.set_prop('type', 'set')
+
+def sequence_type(kind, base, items, schema):
     try:
         return get_type(kind)
     except NameError:
-        return declare(type(kind, (Array, ), {
+        return declare(type(kind, (base, ), {
             'type': items,
             '__module__': __name__,
             '__kind__': kind,
-            '__schema__': array_schema(items)
+            '__schema__': sequence_schema(schema, items)
         }))
 
-class Array(list):
-
-    @classmethod
-    def __adapt__(cls, obj):
-        if not isinstance(obj, basestring) and isinstance(obj, Iterable):
-            items = cls.type
-            return cls(cast(v, items) for v in obj)
-
-def array_schema(items):
-    schema = _s.ArraySchema('null', SCHEMATA)
+def sequence_schema(cls, items):
+    schema = cls('null', SCHEMATA)
     schema.set_prop('items', to_schema(items))
     return schema
 

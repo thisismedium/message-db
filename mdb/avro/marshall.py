@@ -184,6 +184,9 @@ class DatumWriter(io.DatumWriter):
     def write_omap(self, *args):
         return self.write_map(*args)
 
+    def write_set(self, *args):
+        return self.write_array(*args)
+
     def write_union(self, union, datum, encoder):
         index, schema = self.union_schema(union, datum)
         encoder.write_long(index)
@@ -230,6 +233,22 @@ class DatumReader(io.DatumReader):
 
     read_omap = read_map
 
+    def read_array(self, ws, *args):
+        return types.from_schema(ws)(self._array(ws, *args))
+
+    read_set = read_array
+
+    def read_union(self, ws, rs, decoder):
+        ## NOTE: work around lack of schema reconciliation.
+        index = int(decoder.read_long())
+        return self.read_data(ws.schemas[index], rs.schemas[index], decoder)
+
+    def read_error(self, *args):
+        return self.read_record(*args)
+
+    def read_request(self, *args):
+        return self.read_record(*args)
+
     def _map(self, ws, rs, decoder):
         count = decoder.read_long()
         while count != 0:
@@ -242,16 +261,15 @@ class DatumReader(io.DatumReader):
                 yield (key, val)
             count = decoder.read_long()
 
-    def read_union(self, ws, rs, decoder):
-        ## NOTE: work around lack of schema reconciliation.
-        index = int(decoder.read_long())
-        return self.read_data(ws.schemas[index], rs.schemas[index], decoder)
-
-    def read_error(self, *args):
-        return self.read_record(*args)
-
-    def read_request(self, *args):
-        return self.read_record(*args)
+    def _array(self, ws, rs, decoder):
+        count = decoder.read_long()
+        while count != 0:
+            if count < 0:
+                count = -block_count
+                size = decoder.read_long()
+            for i in xrange(count):
+                yield self.read_data(ws.items, rs.items, decoder)
+            count = decoder.read_long()
 
 
 ### Aux

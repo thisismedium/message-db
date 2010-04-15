@@ -158,11 +158,12 @@ class TestTypes(unittest.TestCase):
         self.Box = Box
         self.ValueUnion = union(null, uuid, Pointer)
 
-        ## Arrays an maps over primitive and named types.
+        ## Mappings and Sequences over primitive and named types.
         self.ITree = map(int)
         self.OIMap = omap(int)
         self.PTree = map(Pointer)
         self.IArray = array(int)
+        self.SSet = set(string)
 
         ## A 3-level deep non-named Python type.
         self.PArray = array(self.PTree)
@@ -204,6 +205,11 @@ class TestTypes(unittest.TestCase):
         return self.expect(self.IArray([1, 2]),
                            '\x02\x00\x14array<int>\x04\x02\x04\x00',
                            '[1, 2]')
+
+    def test_sset(self):
+        return self.expect(self.SSet(["foo", "bar", "mumble", "foo"]),
+                           '\x02\x00\x16set<string>\x06\x06bar\x06foo\x0cmumble\x00',
+                           '["bar", "foo", "mumble"]')
 
     def test_parray(self):
         t1 = self.PTree(a=self.Pointer('alpha'))
