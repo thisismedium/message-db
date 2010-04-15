@@ -18,6 +18,11 @@ __all__ = (
 
 ### JSON
 
+## The JSON representation of Avro data corresponds exactly to the
+## binary representation.  This implementation allows classes to
+## implement a special __json__() method to help produce the correct
+## representation.
+
 def dumps(obj):
     """Serialize an object to a JSON string."""
 
@@ -32,12 +37,18 @@ def loads(data, cls):
 class JSONEncoder(json.JSONEncoder):
 
     def _iterencode(self, obj, markers=None):
+
+        ## Try to use the __json__() method to transform this object
+        ## into a serializable value.
         to_json = getattr(type(obj), '__json__', None)
         if to_json:
             obj = to_json(obj)
 
+        ## Treat iterators as lists.
         if isinstance(obj, Iterator):
             return self._iterencode_list(obj, markers)
+
+        ## Fall back on the builtin behavior.
         return super(JSONEncoder, self)._iterencode(obj, markers)
 
 _encoder = JSONEncoder(

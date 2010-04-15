@@ -23,9 +23,11 @@ __all__ = (
 
 cast = adapt
 
-## When a type is declared, it's added to a global registry.  This is
-## used in various places, especially by marshall, to map type names
-## to Python types or visa versa.
+## Avro type names are qualified by a namespace.  This package
+## represents any name in the default namespace without qualification.
+## The intention is to keep client code as simple as possible
+## (namespace free!).  Third-party modules can still use namespaces to
+## isolate their data types.
 
 DEFAULT_NS = 'M.'
 
@@ -38,6 +40,10 @@ def unqualified(name):
     if name.startswith(DEFAULT_NS):
         name = name[len(DEFAULT_NS):]
     return name
+
+## When a type is declared, it's added to a global registry.  This is
+## used in various places, especially by marshall, to map type names
+## to Python types or visa versa.
 
 def declare(type):
     """Add a new type to the global type namespace."""
@@ -56,7 +62,8 @@ def get_type(name):
     return probe
 
 def type_name(type, qualified=False):
-    """Get a type's name."""
+    """Get a type's name.  If qualified=True, don't remove the default
+    namespace."""
 
     if type is None:
         return PRIMITIVE[type.__class__]
@@ -142,6 +149,10 @@ class bytes(str):
 class double(float):
     __slots__ = ()
 
+## The Avro specification doesn't currently support named primitives,
+## but they are implemented here to help client code avoid inventing a
+## secondary dispatching mechanism.
+
 def primitive(name, base):
     """Declare a named, primitive type."""
 
@@ -209,6 +220,11 @@ class Fixed(str):
 ## A naming convention of complex<type> is used to memoize Python
 ## types and to box serialized data.
 
+## An important feature of these complex types is their interaction
+## with adaptation.  When a value is cast to a complex type,
+## __adapt__() method is responsible for ensuring the values it
+## contains are also cast to the correct type.
+
 def complex_name(kind, *values):
     return '%s<%s>' % (kind, ', '.join(type_name(v, True) for v in values))
 
@@ -231,6 +247,9 @@ def adapt_map(cls, obj):
 
 class Map(tree):
     __adapt__ = classmethod(adapt_map)
+
+## The Avro doesn't include support for ordered maps, but the db
+## package needs them to represent a Folder's children.
 
 class OMap(omap):
 

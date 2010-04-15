@@ -87,6 +87,11 @@ def declare(defn):
 
 ## MONKEY PATCH!!!
 
+## Avro's make_avsc_object() is patched here to support named
+## primitive types and ordered maps.  A monkey patch is necesary
+## because this method is called recursively to generate Schema
+## objects.
+
 _make_schema = _s.make_avsc_object
 
 def make_schema(defn, names=None):

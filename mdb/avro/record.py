@@ -92,23 +92,36 @@ class RecordType(type):
             return cls.__fields
 
 def unqualify_schema(data):
-    """Hack around qualified names embedded in exported Avro schema."""
-
+    ## This package represents names in the default namespace as
+    ## "unqualified".  The avro package doesn't make this distinction,
+    ## so the default namespace needs to be stripped when serializing
+    ## a Schema object to JSON.
     if isinstance(data, basestring):
         return types.unqualified(data)
     elif isinstance(data, list):
         return map(unqualify_schema, data)
     elif isinstance(data, dict):
+        ## Type names may be in any of these schema properties:
+        ##   name -- any named schema
+        ##   base -- records
+        ##   items -- arrays
+        ##   values -- maps
         for name in ('base', 'name', 'items', 'values'):
             val = data.get(name)
             if val:
                 data[name] = unqualify_schema(val)
+
+        ## Record fields also have type names in their "type" property.
         fields = data.get('fields', ())
         for field in fields:
             field['type'] = unqualify_schema(field['type'])
+
     return data
 
 class Structure(object):
+    """By default, a Structure does as little as possible.  It has a
+    slot for each field, supports serialization and basic updates."""
+
     __metaclass__ = RecordType
     __abstact__ = True
 
