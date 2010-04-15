@@ -11,14 +11,25 @@ from . import _tree
 
 __all__ = ('branch', 'init', 'get', 'delta')
 
+## The current branch is accessible in the dynamic context.  It can be
+## set globally using the init() method.
+
 BRANCH = fluid.cell(None)
 branch = fluid.accessor(BRANCH)
 
 def init(zs):
+    """Set the global branch; this should be done near the beginning
+    of a program."""
+
     BRANCH.set(_Branch(zs.open()))
     return zs
 
 def get(key):
+    """Resolve a key or sequence of keys.  If a key cannot be
+    resolved, Undefined is returned.  Currently, the result of getting
+    sequence of keys is not guaranteed to keep its objects in the
+    key-order; this may be changed in the future."""
+
     if key is None or isinstance(key, _tree.Content):
         return key
     elif isinstance(key, (basestring, _tree.Key)):
@@ -27,6 +38,9 @@ def get(key):
         return branch().mget(str(k) for k in key)
 
 def _delete(key):
+    """A low-level method for deleting the item associated with a key.
+    Use tree.remove() instead."""
+
     if isinstance(key, _tree.Content):
         key = key.key
     if isinstance(key, (basestring, _tree.Key)):
@@ -36,6 +50,12 @@ def _delete(key):
 
 
 ### Changes
+
+## A branch is updated transactionally by passing it a changeset.  The
+## delta() method establishes a "shadow" branch in its dynamic extend
+## that collects changes made to the content tree.  At the end of the
+## context, the checkpoint() method can be used to write the changes
+## to the branch.
 
 @contextmanager
 def delta(message):

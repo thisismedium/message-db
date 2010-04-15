@@ -20,6 +20,11 @@ __all__ = _tree.__all__ + (
 
 ### Content Tree
 
+## The content tree is made up of Items.  A Folder is an Item that has
+## children; otherwise an Item is a leaf node in the tree.  Methods
+## defined in these classes support basic manipulation operations and
+## implement the query-tree interface.
+
 @abc.implements(tree.Node)
 class Item(content('Item')):
 
@@ -104,6 +109,10 @@ class Page(content('Page')):
 
 ### Traversal
 
+## The query() method is a generalized way to traverse the content
+## tree using XPath-style queries.  Additionally, resolve() can be
+## used to resolve a simple path to a specific item.
+
 ROOT = _tree.Key.make(Site, 'root')
 
 def root():
@@ -137,6 +146,10 @@ def walk(item):
 
 
 ### Manipulation
+
+## These manipulation primitives expect to be run in the context of a
+## Delta (see api.py).  Together, they allow items to be created,
+## added to a folder, updated, and removed.
 
 def make(cls, **kw):
     name = _slug(kw.get('name') or kw.get('title', ''))

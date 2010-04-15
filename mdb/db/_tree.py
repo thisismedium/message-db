@@ -13,6 +13,9 @@ __all__ = ('get_type', 'type_name', 'Key', 'text', 'html')
 
 ### Types
 
+## Re-export get_type() and type_name() from Avro.  This gives the db
+## package a layer of indirection if necessary.
+
 get_type = avro.get_type
 
 def type_name(obj):
@@ -20,18 +23,27 @@ def type_name(obj):
         return obj
     return avro.type_name(obj)
 
-## Built-in types are declared in an external schema for now.
+## Built-in types are declared in an external schema for now.  The
+## record types defined in this package are principly focused on
+## representing web content hierarchically.
 
 avro.require('tree.json')
 
 def content(name):
+    """Define a new Content structure."""
+
     return avro.structure('M.%s' % name, base=Content)
 
 class Content(avro.Structure):
+    """This is an abstract base class for content structures.  See
+    tree.py for concrete classes."""
+
     __abstract__ = True
     __slots__ = ('_key', )
 
     def __init__(self, **kw):
+        ## Use the field definitions to determine types and default
+        ## values for the keyword arguments if necessary.
         for field in self.__schema__.fields:
             val = kw.pop(field.name, Undefined)
             if val is Undefined:
@@ -63,7 +75,7 @@ class Content(avro.Structure):
 ### Key
 
 class Key(avro.structure('M.key', weak=True)):
-    """A Key identifies a model instance.
+    """A Key identifies a Content instance.
 
     >>> k1 = Key.make('Foo')
     >>> k2 = Key.make('Foo')
@@ -176,6 +188,14 @@ class Key(avro.structure('M.key', weak=True)):
     def _encode(self):
         data = avro.dumps_binary(self, box=None, header=False)
         return base64.urlsafe_b64encode(data).rstrip('=')
+
+
+### Extra Types
+
+## These types aren't used directly, but are defined here because they
+## are declared in the external schema.  If the avro package supports
+## automatic creation of non-record types in the future, these can be
+## removed.
 
 class _uuid(avro.fixed('M.uuid')):
     """The id field of most keys is a uuid."""

@@ -11,12 +11,21 @@ from . import tree, api
 
 __all__ = ('memory', 'fsdir')
 
+
+### Datastore Types
+
 def memory(base, app_id):
+    """Create a datastore in memory.  Once a program
+    terminates, the data is destroyed."""
+
     zs = data.zipper(data.back.memory())
     api.init(zs.create())
     return load_yaml(base)
 
 def fsdir(base, app_id):
+    """Create a datastore in the filesystem using a git-style
+    object store format."""
+
     path = os.path.join(base, '%s.data' % app_id)
     zs = data.zipper(data.back.fsdir(path))
     if not os.path.exists(path):
@@ -30,6 +39,25 @@ def fsdir(base, app_id):
 ### Import
 
 def load_yaml(path):
+    """Load yaml files found in path.
+
+    A file named 'foo--bar--baz.yaml' would be interpreted as the item
+    '/foo/bar/baz' in the content tree.  If the folders '/foo' and
+    '/foo/bar' don't exist, they will be created first.
+
+    The contents of the file should be a mapping of field names to
+    values.  The special property "kind" indicates what type of item
+    to create.  For example:
+
+        kind: Page
+        description: A page about this demo.
+        content:
+          <p>This is some content!</p>
+
+    If no "name" is given, the name is taken from the filename.  If no
+    "title" is given, the "name" is transformed into a title.
+    """
+
     import yaml, glob
 
     with api.delta('Imported %r.' % path) as delta:
