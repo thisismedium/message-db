@@ -11,9 +11,9 @@ from .. import avro
 from . import _tree, api
 
 __all__ = (
-    'User', 'email', 'password',
+    'User', 'identifier', 'email', 'password',
     'list_users', 'get_user', 'valid_user', 'is_admin',
-    'user', 'set_user', 'authenticator',
+    'user', 'set_user', 'authenticator', 'author',
     'user_delta', 'make_user', 'save_user', 'remove_user',
     'LocalAuth'
 )
@@ -27,16 +27,30 @@ class User(_tree.content('User')):
 
     def __init__(self, **kw):
         super(User, self).__init__(**kw)
-        self.password = make_password(self.email, self.password)
+        self.password = make_password(self.name, self.password)
 
     def __repr__(self):
-        return '%s <%s>' % (self.name, self.email)
+        return '%s <%s>' % (self.display_name(), self.email)
+
+    def display_name(self):
+        return self.full_name or self.name
 
     def update(self, seq=(), **kw):
         pwd = update(kw, seq).pop('password', '')
         if pwd:
-            kw['password'] = make_password(kw.get('email', self.email), pwd)
+            kw['password'] = make_password(kw.get('name', self.name), pwd)
         return super(User, self).update(kw)
+
+class identifier(avro.primitive('M.identifier', avro.string)):
+    """A name that must be lowercase and not have spaces or odd
+    characters."""
+
+    def __new__(cls, value):
+        return super(identifier, cls).__new__(cls, cls.normalize(value))
+
+    @staticmethod
+    def normalize(value):
+        return value.lower()
 
 class email(avro.primitive('M.email', avro.string)):
     """An email address."""
@@ -58,12 +72,12 @@ _roles = avro.set(avro.string)
 def list_users():
     return api.find(User)
 
-def get_user(email, require=False):
+def get_user(name, require=False):
     ## FIXME: Change this to get from the repository once repositories
     ## and branches are implemented.
-    user = api.get(_tree.Key.make(User, name=email))
+    user = api.get(_tree.Key.make(User, name=identifier.normalize(name)))
     if require and not user:
-        raise ValueError('User does not exist: %r.' % email)
+        raise ValueError('User does not exist: %r.' % name)
     return user
 
 def valid_user(obj):
@@ -94,6 +108,15 @@ def init_auth(auth=None, service=None, host=None):
     CURRENT_AUTH.set(auth)
     return auth
 
+def author():
+    """When transactions are committed to a zipper, this name is
+    recorded with the changes."""
+
+    user = CURRENT_USER.value
+    if user is not fluid.UNDEFINED:
+        return user.display_name()
+    return 'Anonymous <nobody@example.net>'
+
 
 ### User Manipulation
 
@@ -101,18 +124,20 @@ def user_delta(message):
     return api.delta(message)
 
 def make_user(_kind=None, **kw):
-    email = kw.get('email')
-    if not email:
-        raise TypeError("Missing required 'email' parameter.")
-    if get_user(email):
-        raise NameError('User already exists: %r.' % email)
-    return api.new(_kind or User, update(kw, key_name=email))
+    name = kw.get('name')
+    if not name:
+        raise TypeError("Missing required 'name' parameter.")
+    if get_user(name):
+        raise NameError('User already exists: %r.' % name)
+    return api.new(_kind or User, update(kw, key_name=name))
 
 def save_user(user, *args, **kw):
+    if not user:
+        raise NameError('User does not exist: %r.' % user)
     return api.update(user.update(*args, **kw))
 
 def remove_user(user):
-    if not (user and get_user(user.email)):
+    if not (user and get_user(user.name)):
         raise NameError('User does not exist: %r.' % user)
     api.delete(user)
 
@@ -121,15 +146,15 @@ def remove_user(user):
 
 PASSWORD_TYPE = sasl.DigestMD5Password
 
-def make_password(email, passwd):
+def make_password(name, passwd):
     auth = authenticator()
     if not auth:
         raise ValueError('No active authenticator.')
-    return password(PASSWORD_TYPE.make(auth, email, passwd))
+    return password(PASSWORD_TYPE.make(auth, name, passwd))
 
 class LocalAuth(sasl.Authenticator):
     def __init__(self, service=None, host=None):
-        self._service = service or 'message'
+        self._service = service or 'xmpp'
         self._host = host or get_host()
 
     def service_type(self):
@@ -147,13 +172,13 @@ class LocalAuth(sasl.Authenticator):
     def password(self):
         raise NotImplemented
 
-    def get_password(self, email):
-        user = get_user(email)
+    def get_password(self, name):
+        user = get_user(name)
         return user and user.password
 
-    def _compare_passwords(self, email, attempt, stored):
+    def _compare_passwords(self, name, attempt, stored):
         try:
-            return PASSWORD_TYPE.make(self, email, attempt) == stored
+            return PASSWORD_TYPE.make(self, name, attempt) == stored
         except sasl.PasswordError:
             return False
 

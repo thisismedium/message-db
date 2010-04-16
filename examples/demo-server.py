@@ -3,22 +3,44 @@
 """demo-server.py -- serve up a demo content tree
 
 This example answers path queries sent over XMPP.  A content tree is
-built from the YAML data in the "demo" directory.  When a path query
-is received the query is evaluated against the root of the content
-tree and matching items are returned in a JSON format.
+built from the YAML data in the "demo" directory.  When the server
+processes a request, the result is returned in a JSON format.
+
+Usage: demo-server.py [options]
+
+   -h  Show this message.
+   -v  Show extra output.
 """
 
-import os, sys, xmpp, base64, hashlib, logging
+import os, sys, xmpp, base64, hashlib, logging, getopt
 from md import collections as coll
 from xmpp import xml
 from mdb import db, avro
 
-def main(data):
+VERBOSE = False
 
-    folder = os.path.dirname(data)
-    db.init('demo', 'fsdir:%s' % data,
-            load='yaml:%s' % folder, create=setup,
-            host='localhost')
+def main(data):
+    opts = dict(getopt.getopt(sys.argv[1:], 'vh')[0])
+
+    if '-v' in opts:
+        verbose()
+    elif '-h' in opts:
+        return help()
+
+    start('fsdir:%s' % data, 'yaml:%s' % os.path.dirname(data))
+
+def help():
+    print __doc__
+    sys.exit()
+
+def verbose():
+    global VERBOSE
+
+    VERBOSE = True
+    xmpp.log.setLevel(logging.DEBUG)
+
+def start(data, load):
+    db.init('demo', data, load=load, create=setup, host='localhost')
 
     auth = db.authenticator()
     server = xmpp.Server({
@@ -32,7 +54,7 @@ def main(data):
 
 def setup():
     with db.user_delta('Create users') as delta:
-        db.make_user(name='Example User', email='user@localhost', password='secret')
+        db.make_user(name='user', password='secret', email='user@localhost')
         delta.checkpoint()
 
 class QueryServer(xmpp.Plugin):
@@ -113,6 +135,8 @@ class QueryServer(xmpp.Plugin):
             name = iq[0].get('method', iq.get('type')).lower()
             text = iq[0].text
             data = text and base64.b64decode(text)
+            if VERBOSE:
+                print 'REQUEST (%s/%s):' % (iq.get('type'), iq.get('id')), repr(data)
         except (IndexError, AttributeError) as exc:
             return self.error(iq, 'modify', 'bad-request', str(exc))
 
@@ -144,6 +168,8 @@ class QueryServer(xmpp.Plugin):
         """Create a result for _dispatch."""
 
         attr.setdefault('xmlns', 'urn:M')
+        if VERBOSE:
+            print 'RESULT (%s/%s):' % (iq.get('type'), iq.get('id')), repr(data)
         return self.iq('result', iq, self.E(
             iq[0].tag,
             attr,

@@ -31,7 +31,7 @@ def init(app_id, path=None, load=None, create=None,
     return zs
 
 def zipper(app_id, path):
-    return data.zipper(backing(path))
+    return data.zipper(backing(path), author=auth_.author)
 
 
 ### Extensible initialization

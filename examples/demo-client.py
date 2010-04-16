@@ -16,11 +16,11 @@ Example:
 ./demo-client.py get-item '*'
 
 ./demo-client.py get-user ''
-./demo-client.py get-user 'user@localhost'
-./demo-client.py set-user '[{ "method": "create", "data": { "name": "New User", "email": "new@localhost", "password": "hello" }}]'
+./demo-client.py get-user 'user'
+./demo-client.py set-user '[{ "method": "create", "data": { "name": "new", "email": "new@localhost", "password": "hello" }}]'
 ./demo-client.py get-user ''
-./demo-client.py set-user '[{ "method": "save", "data": { "_key": "DE0uVXNlcgIabmV3QGxvY2FsaG9zdA", "admin": true }}]'
-./demo-client.py set-user '[{ "method": "remove", "data": { "_key": "DE0uVXNlcgIabmV3QGxvY2FsaG9zdA" }}]'
+./demo-client.py set-user '[{ "method": "save", "data": { "_key": "DE0uVXNlcgIGbmV3", "admin": true }}]'
+./demo-client.py set-user '[{ "method": "remove", "data": { "_key": "DE0uVXNlcgIGbmV3" }}]'
 """
 
 import os, sys, xmpp, socket, base64
@@ -34,9 +34,8 @@ def usage():
 def main(method, query):
     client = xmpp.Client({
         'plugins': [(QueryClient, { 'method': method, 'query': query })],
-        'username': 'user@localhost',
+        'username': 'user',
         'password': 'secret',
-        'service': 'message',
         'host': 'localhost'
     })
     xmpp.start([xmpp.TCPClient(client).connect('127.0.0.1', 5222)])

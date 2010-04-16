@@ -113,34 +113,35 @@ class TestAuth(unittest.TestCase):
 
     def _create(self):
         with user_delta('Add users') as d:
-            self.foo = make_user(name='Foo', email='foo@example.net', password='secret')
-            self.bar = make_user(name='Bar', email='bar@example.net', password='terces', admin=True)
+            self.foo = make_user(name='foo', email='foo@example.net', password='secret')
+            self.bar = make_user(name='bar', email='bar@example.net', password='terces', admin=True)
             d.checkpoint()
 
     def test_props(self):
-        self.assertEqual(repr(self.foo), 'Foo <foo@example.net>')
-        self.assertEqual(self.foo.password, '{DIGEST-MD5}ccd954df41d8f2e1d600954840d3f34c')
+        self.assertEqual(repr(self.foo), 'foo <foo@example.net>')
+        self.assertEqual(str(self.foo.password), '{DIGEST-MD5}bfeff2d37e161fad556dd382f313dc00')
         self.assertEqual(is_admin(self.foo), False)
         self.assertEqual(is_admin(self.bar), True)
 
     def test_create(self):
         with user_delta('Create baz') as d:
-            baz = make_user(name='Baz', email='baz@example.net', password='hidden')
+            baz = make_user(name='baz', email='baz@example.net', password='hidden')
             d.checkpoint()
 
         self.assertEqual(avro.dumps(baz),
-                         '{"_key": "DE0uVXNlcgIeYmF6QGV4YW1wbGUubmV0", "_kind": "User", "admin": false, "email": "baz@example.net", "name": "Baz", "password": "", "roles": []}')
+                         '{"_key": "DE0uVXNlcgIGYmF6", "_kind": "User", "admin": false, "email": "baz@example.net", "full_name": "", "name": "baz", "password": "", "roles": []}')
 
         with user_delta('Create baz') as d:
             self.assertRaises(NameError, lambda: make_user(name='Baz', email='baz@example.net', password='hidden'))
 
     def test_get(self):
-        self.assertEqual(get_user('foo@example.net'), self.foo)
-        self.assertEqual(get_user('baz@nowhere.com'), Undefined)
+        self.assertEqual(get_user('foo'), self.foo)
+        self.assertEqual(get_user('Foo'), self.foo)
+        self.assertEqual(get_user('baz'), Undefined)
 
     def test_list(self):
-        self.assertEqual(sorted(u.email for u in list_users()),
-                         ['bar@example.net', 'foo@example.net'])
+        self.assertEqual(sorted(u.name for u in list_users()),
+                         ['bar', 'foo'])
 
     def test_update(self):
         with user_delta('Update foo') as d:
@@ -148,11 +149,11 @@ class TestAuth(unittest.TestCase):
             d.checkpoint()
 
         self.assertEqual(avro.dumps(self.foo),
-                         '{"_key": "DE0uVXNlcgIeZm9vQGV4YW1wbGUubmV0", "_kind": "User", "admin": true, "email": "foo@example.net", "name": "Foo", "password": "", "roles": []}')
+                         '{"_key": "DE0uVXNlcgIGZm9v", "_kind": "User", "admin": true, "email": "foo@example.net", "full_name": "", "name": "foo", "password": "", "roles": []}')
 
-        foo = get_user('foo@example.net')
+        foo = get_user('foo')
         self.assertEqual(is_admin(foo), True)
-        self.assertEqual(foo.password, '{DIGEST-MD5}238eda908da86e205cb03b34bc02869c')
+        self.assertEqual(str(foo.password), '{DIGEST-MD5}236856eb15d36cadb24338d244d2fa26')
 
     def test_remove(self):
         with user_delta('Delete bar') as d:
@@ -160,11 +161,11 @@ class TestAuth(unittest.TestCase):
             self.assertRaises(NameError, lambda: remove_user(self.bar))
             d.checkpoint()
 
-        self.assertEqual(get_user('bar@example.net'), Undefined)
+        self.assertEqual(get_user('bar'), Undefined)
 
     def test_login(self):
-        self.assert_(self._login('foo@example.net', 'secret'))
-        self.assert_(not self._login('foo@example.net', 'bad-password'))
+        self.assert_(self._login('foo', 'secret'))
+        self.assert_(not self._login('foo', 'bad-password'))
 
     def _login(self, user, pwd, mech=None):
         client = self._client(user, pwd)

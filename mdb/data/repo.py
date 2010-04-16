@@ -109,7 +109,7 @@ class zipper(object):
             self._open()
             head = self._state.get(self.HEAD)
             if head is Undefined:
-                raise RepoError('Created %s first.' % self)
+                raise RepoError('Create %s first.' % self)
             self._move_head(head)
         return self
 
