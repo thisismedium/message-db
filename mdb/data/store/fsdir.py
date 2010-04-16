@@ -25,9 +25,12 @@ class fsdir(object):
     def __repr__(self):
         return '%s(%r)' % (type(self).__name__, self._path)
 
+    def exists(self):
+        return os.exists(self._path)
+
     def open(self):
         if self._cas is None:
-            if not os.exists(self._path):
+            if not self.exists():
                 os.makedirs(self._path)
             self._cas = self.CASType()
         return self

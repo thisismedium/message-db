@@ -14,19 +14,31 @@ from xmpp import xml
 from mdb import db, avro
 
 def main(data):
-    top = db.load.fsdir(os.path.basename(data), data)
+
+    folder = os.path.dirname(data)
+    db.init('demo', 'fsdir:%s' % data,
+            load='yaml:%s' % folder, create=setup,
+            host='localhost')
+
+    auth = db.authenticator()
     server = xmpp.Server({
-        'plugins': [(QueryServer, { 'root': top })],
-        'users': { 'user': 'secret' },
-        'host': 'localhost'
+        'plugins': [QueryServer],
+        'auth': auth,
+        'jid': auth.host()
     })
+
     print 'Waiting for clients...'
     xmpp.start([xmpp.TCPServer(server).bind('127.0.0.1', 5222)])
 
+def setup():
+    with db.user_delta('Create users') as delta:
+        db.make_user(name='Example User', email='user@localhost', password='secret')
+        delta.checkpoint()
+
 class QueryServer(xmpp.Plugin):
 
-    def __init__(self, root):
-        self.root = root
+    def __init__(self):
+        self.root = db.root()
 
     @xmpp.stanza('presence')
     def presence(self, elem):
@@ -40,16 +52,7 @@ class QueryServer(xmpp.Plugin):
         return self._dumps(iq, db.query(query, self.root))
 
     def set_item(self, iq, data):
-        result = coll.omap()
-        with db.delta(iq[0].get('message', 'set items')) as delta:
-            for action in loads(data):
-                method = getattr(self, 'set_item_%s' % action['method'], None)
-                if not method:
-                    raise ValueError('Bad action: %r.' % action)
-                for affected in method(action['data']):
-                    result.setdefault(affected.key, affected)
-            delta.checkpoint()
-        return self._dumps(iq, result.values())
+        return self._change('set_item', iq, data, db.delta, 'update items')
 
     def set_item_create(self, data):
         path = data['_path']
@@ -81,12 +84,35 @@ class QueryServer(xmpp.Plugin):
         match = hashlib.md5(result).hexdigest()
         return self._result(iq, result, match=match)
 
+    @xmpp.iq('{urn:M}user')
+    def message_user(self, iq):
+        return self._dispatch(iq)
+
+    def get_user(self, iq, data):
+        return self._dumps(iq, db.get_user(data) if data else db.list_users())
+
+    def set_user(self, iq, data):
+        return self._change('set_user', iq, data, db.delta, 'update users')
+
+    def set_user_create(self, data):
+        kind = data.get('_kind')
+        attr = dict(without_underscores(data))
+        yield db.make_user(kind and db.get_type(kind), **attr)
+
+    def set_user_save(self, data):
+        yield db.save_user(db.get(data['_key']), without_underscores(data))
+
+    def set_user_remove(self, data):
+        db.remove_user(db.get(data['_key']))
+        return ()
+
     def _dispatch(self, iq):
         """Something resembling an HTTP method dispatcher."""
 
         try:
             name = iq[0].get('method', iq.get('type')).lower()
-            data = base64.b64decode(iq[0].text)
+            text = iq[0].text
+            data = text and base64.b64decode(text)
         except (IndexError, AttributeError) as exc:
             return self.error(iq, 'modify', 'bad-request', str(exc))
 
@@ -101,6 +127,18 @@ class QueryServer(xmpp.Plugin):
         except Exception as exc:
             logging.exception('Exception while processing IQ.')
             return self.error(iq, 'modify', 'undefined-condition', str(exc))
+
+    def _change(self, prefix, iq, data, delta, message):
+        result = coll.omap()
+        with delta(iq.get('message', message)) as d:
+            for action in loads(data):
+                method = getattr(self, '%s_%s' % (prefix, action['method']), None)
+                if not method:
+                    raise ValueError('Bad action: %r.' % action)
+                for affected in method(action['data']):
+                    result.setdefault(affected.key, affected)
+            d.checkpoint()
+        return self._dumps(iq, result.values())
 
     def _result(self, iq, data, **attr):
         """Create a result for _dispatch."""
@@ -132,4 +170,4 @@ def state(obj, rec=None):
     return obj
 
 if __name__ == '__main__':
-    main(os.path.join(os.path.dirname(__file__), 'demo'))
+    main(os.path.join(os.path.dirname(__file__), 'demo', 'demo.data'))

@@ -35,6 +35,9 @@ class static(object):
         name = getattr(self._marshall, '__name__', None) or repr(self._marshall)
         return '%s(%r, %s)' % (type(self).__name__, self._back, name)
 
+    def exists(self):
+        return self._back.exists()
+
     def open(self):
         if self._cache is None:
             self._back.open()

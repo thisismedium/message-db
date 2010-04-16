@@ -35,10 +35,7 @@ class Item(content('Item')):
         return True
 
     def __json__(self):
-        return update(self.__getstate__(),
-                      _kind=self.kind,
-                      _key=self.key,
-                      _path=path(self))
+        return update(super(Item, self).__json__(), _path=path(self))
 
     @property
     def parent(self):

@@ -9,16 +9,15 @@ from md.prelude import *
 from .. import avro
 from . import *; from . import _tree
 
-def load():
-    from . import load
-
+def load_test_data():
     data = os.path.join(os.path.dirname(__file__), 'test')
-    return load.memory('test', data)
+    init('test', 'memory:', load='yaml:%s' % data)
+    return root()
 
 class TestTree(unittest.TestCase):
 
     def setUp(self):
-        self.root = load()
+        self.root = load_test_data()
 
     def test_key(self):
         key = self.root.key
@@ -71,7 +70,7 @@ class TestTree(unittest.TestCase):
 class TestQuery(unittest.TestCase):
 
     def setUp(self):
-        self.root = load()
+        self.root = load_test_data()
 
     def test_root(self):
         self._check('/', (Site, 'test'))
@@ -107,14 +106,10 @@ class TestQuery(unittest.TestCase):
 class TestAuth(unittest.TestCase):
 
     def setUp(self):
-        from . import load
-
-        self.zs = load.memory('test')
-        init_auth(LocalAuth())
-        self._create()
-
         import logging
+
         sasl.log.setLevel(logging.CRITICAL)
+        self.zs = init('test', 'memory:', create=self._create)
 
     def _create(self):
         with user_delta('Add users') as d:
@@ -127,6 +122,17 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(self.foo.password, '{DIGEST-MD5}ccd954df41d8f2e1d600954840d3f34c')
         self.assertEqual(is_admin(self.foo), False)
         self.assertEqual(is_admin(self.bar), True)
+
+    def test_create(self):
+        with user_delta('Create baz') as d:
+            baz = make_user(name='Baz', email='baz@example.net', password='hidden')
+            d.checkpoint()
+
+        self.assertEqual(avro.dumps(baz),
+                         '{"_key": "DE0uVXNlcgIeYmF6QGV4YW1wbGUubmV0", "_kind": "User", "admin": false, "email": "baz@example.net", "name": "Baz", "password": "", "roles": []}')
+
+        with user_delta('Create baz') as d:
+            self.assertRaises(NameError, lambda: make_user(name='Baz', email='baz@example.net', password='hidden'))
 
     def test_get(self):
         self.assertEqual(get_user('foo@example.net'), self.foo)
@@ -141,6 +147,9 @@ class TestAuth(unittest.TestCase):
             save_user(self.foo, admin=True, password='new-password')
             d.checkpoint()
 
+        self.assertEqual(avro.dumps(self.foo),
+                         '{"_key": "DE0uVXNlcgIeZm9vQGV4YW1wbGUubmV0", "_kind": "User", "admin": true, "email": "foo@example.net", "name": "Foo", "password": "", "roles": []}')
+
         foo = get_user('foo@example.net')
         self.assertEqual(is_admin(foo), True)
         self.assertEqual(foo.password, '{DIGEST-MD5}238eda908da86e205cb03b34bc02869c')
@@ -148,6 +157,7 @@ class TestAuth(unittest.TestCase):
     def test_remove(self):
         with user_delta('Delete bar') as d:
             remove_user(self.bar)
+            self.assertRaises(NameError, lambda: remove_user(self.bar))
             d.checkpoint()
 
         self.assertEqual(get_user('bar@example.net'), Undefined)

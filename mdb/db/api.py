@@ -9,7 +9,7 @@ from md import fluid
 from .. import avro, data
 from . import _tree
 
-__all__ = ('branch', 'init', 'get', 'find', 'new', 'update', 'delete', 'delta')
+__all__ = ('branch', 'get', 'find', 'new', 'update', 'delete', 'delta')
 
 ## The current branch is accessible in the dynamic context.  It can be
 ## set globally using the init() method.
@@ -17,9 +17,9 @@ __all__ = ('branch', 'init', 'get', 'find', 'new', 'update', 'delete', 'delta')
 BRANCH = fluid.cell(None, type=fluid.acquired)
 branch = fluid.accessor(BRANCH)
 
-def init(zs):
+def init_api(zs):
     """Set the global branch; this should be done near the beginning
-    of a program."""
+    of a program.  See load.init()."""
 
     BRANCH.set(_Branch(zs.open()))
     return zs
@@ -136,9 +136,8 @@ class _Delta(object):
         return obj
 
     def get(self, key):
-        probe = self._data.get(key, Undefined)
-        if probe is not Undefined:
-            return probe
+        if key in self._data:
+            return self._data[key]
         return self._source.get(key)
 
     def mget(self, keys):

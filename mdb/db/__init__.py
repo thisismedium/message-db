@@ -8,5 +8,5 @@ from .path_query import *
 from .tree import *
 from .api import *
 from .auth import *
-from . import load
+from .load import *
 

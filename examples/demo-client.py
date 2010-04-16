@@ -5,15 +5,22 @@
 Example:
 
 ## In one terminal:
-> python demo-server.py
+./demo-server.py
 
 ## In another terminal:
-> python demo-client.py get-item '*'
-> python demo-client.py set-item '[{ "method": "create", "data": { "_kind": "Page", "_path": "/example" } }]'
-> python demo-client.py set-item '[{ "method": "save", "data": { "_path": "/example", "title": "Hello, world!" } }]'
-> python demo-client.py get-item '*'
-> python demo-client.py set-item '[{ "method": "remove", "data": { "_path": "/example" } }]'
-> python demo-client.py get-item '*'
+./demo-client.py get-item '*'
+./demo-client.py set-item '[{ "method": "create", "data": { "_kind": "Page", "_path": "/example" } }]'
+./demo-client.py set-item '[{ "method": "save", "data": { "_path": "/example", "title": "Hello, world!" } }]'
+./demo-client.py get-item '*'
+./demo-client.py set-item '[{ "method": "remove", "data": { "_path": "/example" } }]'
+./demo-client.py get-item '*'
+
+./demo-client.py get-user ''
+./demo-client.py get-user 'user@localhost'
+./demo-client.py set-user '[{ "method": "create", "data": { "name": "New User", "email": "new@localhost", "password": "hello" }}]'
+./demo-client.py get-user ''
+./demo-client.py set-user '[{ "method": "save", "data": { "_key": "DE0uVXNlcgIabmV3QGxvY2FsaG9zdA", "admin": true }}]'
+./demo-client.py set-user '[{ "method": "remove", "data": { "_key": "DE0uVXNlcgIabmV3QGxvY2FsaG9zdA" }}]'
 """
 
 import os, sys, xmpp, socket, base64
@@ -27,8 +34,9 @@ def usage():
 def main(method, query):
     client = xmpp.Client({
         'plugins': [(QueryClient, { 'method': method, 'query': query })],
-        'username': 'user',
+        'username': 'user@localhost',
         'password': 'secret',
+        'service': 'message',
         'host': 'localhost'
     })
     xmpp.start([xmpp.TCPClient(client).connect('127.0.0.1', 5222)])
@@ -45,7 +53,7 @@ class QueryClient(xmpp.Plugin):
         self.iq(type, self.on_reply, self.E(
             name,
             { 'xmlns': 'urn:M' },
-            base64.b64encode(query)
+            query and base64.b64encode(query)
         ))
 
     def on_reply(self, iq):

@@ -18,7 +18,9 @@ def usage():
     sys.exit(1)
 
 def main(data, expr):
-    db.load.fsdir(os.path.basename(data), data)
+    folder = os.path.dirname(data)
+    db.init('demo', 'fsdir:%s' % data, load='yaml:%s' % folder)
+
     print 'Result of %r:' % expr
     result = db.query(expr)
     if isinstance(result, tuple):
@@ -32,4 +34,4 @@ def main(data, expr):
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         usage()
-    main(os.path.join(os.path.dirname(__file__), 'demo'), sys.argv[1])
+    main(os.path.join(os.path.dirname(__file__), 'demo', 'demo.data'), sys.argv[1])

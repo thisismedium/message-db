@@ -27,6 +27,9 @@ class prefixed(object):
     def __repr__(self):
         return '%s(%r, %r)' % (type(self).__name__, self._back, self._prefix)
 
+    def exists(self):
+        return self._back.exists()
+
     def open(self):
         self._back.open()
         return self

@@ -54,6 +54,9 @@ class Content(avro.Structure):
         if kw:
             raise TypeError('%r does not support extra properties: %r.')
 
+    def __json__(self):
+        return update(self.__getstate__(), _kind=self.kind, _key=self.key)
+
     @property
     def kind(self):
         return type(self).__name__
@@ -187,12 +190,12 @@ class Key(avro.structure('M.key', weak=True)):
     ## Use a base64 encoded binary Avro value as the opaque
     ## representation.
 
-    @staticmethod
-    def _decode(enc):
+    @classmethod
+    def _decode(cls, enc):
         pad = len(enc) % 4
         enc = str(enc) + '=' * (4 - pad) if pad else enc
         data = base64.urlsafe_b64decode(enc)
-        return avro.loads_binary(data, unbox=None, header=False)
+        return avro.loads_binary(data, cls=cls, unbox=None, header=False)
 
     def _encode(self):
         data = avro.dumps_binary(self, box=None, header=False)

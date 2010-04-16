@@ -101,6 +101,9 @@ class zipper(object):
     def is_open(self):
         return bool(self.head)
 
+    def exists(self):
+        return self._state.exists()
+
     def open(self):
         if not self.is_open():
             self._open()

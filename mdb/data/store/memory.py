@@ -22,14 +22,19 @@ class memory(object):
     def __repr__(self):
         return '%s()' % type(self).__name__
 
+    def exists(self):
+        ## Memory is a special case; existence and open-ness are the
+        ## same thing.
+        return self._data is not None
+
     def open(self):
-        if self._data is None:
+        if not self.exists():
             self._data = self.DataType()
             self._cas = self.CasType()
         return self
 
     def close(self):
-        if self._data is not None:
+        if self.exists():
             self._data = None
             self._cas = None
         return self

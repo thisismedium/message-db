@@ -13,7 +13,7 @@ from . import _tree, api
 __all__ = (
     'User', 'email', 'password',
     'list_users', 'get_user', 'valid_user', 'is_admin',
-    'user', 'set_user', 'authenticator', 'init_auth',
+    'user', 'set_user', 'authenticator',
     'user_delta', 'make_user', 'save_user', 'remove_user',
     'LocalAuth'
 )
@@ -87,7 +87,10 @@ def set_user(user):
 CURRENT_AUTH = fluid.cell(None, type=fluid.acquired)
 authenticator = fluid.accessor(CURRENT_AUTH)
 
-def init_auth(auth):
+def init_auth(auth=None, service=None, host=None):
+    """Initialize the authentication service.  See load.init()."""
+
+    auth = auth or LocalAuth(service, host)
     CURRENT_AUTH.set(auth)
     return auth
 
@@ -97,13 +100,20 @@ def init_auth(auth):
 def user_delta(message):
     return api.delta(message)
 
-def make_user(**kw):
-    return api.new(User, update(kw, key_name=kw.get('email')))
+def make_user(_kind=None, **kw):
+    email = kw.get('email')
+    if not email:
+        raise TypeError("Missing required 'email' parameter.")
+    if get_user(email):
+        raise NameError('User already exists: %r.' % email)
+    return api.new(_kind or User, update(kw, key_name=email))
 
 def save_user(user, *args, **kw):
     return api.update(user.update(*args, **kw))
 
 def remove_user(user):
+    if not (user and get_user(user.email)):
+        raise NameError('User does not exist: %r.' % user)
     api.delete(user)
 
 
@@ -115,7 +125,7 @@ def make_password(email, passwd):
     auth = authenticator()
     if not auth:
         raise ValueError('No active authenticator.')
-    return PASSWORD_TYPE.make(auth, email, passwd)
+    return password(PASSWORD_TYPE.make(auth, email, passwd))
 
 class LocalAuth(sasl.Authenticator):
     def __init__(self, service=None, host=None):
@@ -138,7 +148,8 @@ class LocalAuth(sasl.Authenticator):
         raise NotImplemented
 
     def get_password(self, email):
-        return valid_user(email).password
+        user = get_user(email)
+        return user and user.password
 
     def _compare_passwords(self, email, attempt, stored):
         try:
