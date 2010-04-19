@@ -1,3 +1,14 @@
+{ "type": "fixed", "name": "M.uuid", "size": 16 }
+
+{
+    "type": "record",
+    "name": "M.key",
+    "fields": [
+        { "name": "kind", "type": "string" },
+        { "name": "id", "type": [ "M.uuid", "string" ] }
+    ]
+}
+
 {
     "type": "record",
     "name": "M.branch",

@@ -4,13 +4,13 @@
 """repo -- versioned key/value datastore"""
 
 from __future__ import absolute_import
-import os, datetime, weakref, time
+import os, datetime, weakref, time, uuid, base64
 from md.prelude import *
 from md import abc, fluid
 from . import store, avro
 
 __all__ = (
-    'RepoError', 'TransactionError', 'TransactionFailed', 'zipper',
+    'RepoError', 'TransactionError', 'TransactionFailed', 'zipper', 'Key',
     'repository', 'branch', 'message', 'Deleted'
 )
 
@@ -340,6 +340,145 @@ BranchConfig = avro.map(avro.string)
 ## The main purpose of a zipper is to make a "logical" key/value space
 ## over a shared "static" space.  It does this by keeping a mapping of
 ## <logical-key, static-reference> items.
+
+## A key could simply be a string.  To facilite direct references and
+## indexing, this Key type may be used instead.  It's primary
+## representation is a base64-encoded binary avro <type-name, id>
+## pair.
+
+class Key(avro.structure('M.key', weak=True)):
+    """A Key identifies values in the logical address space.
+
+    >>> k1 = Key.make('Foo')
+    >>> k2 = Key.make('Foo')
+    >>> k3 = Key.make('Foo', 'bar'); k3
+    key('BkZvbwIGYmFy')
+    >>> k1 is not k2
+    True
+    >>> k2 is Key(str(k2))
+    True
+    >>> k3 is Key.make('Foo', 'bar')
+    True
+    >>> k3 is Key('BkZvbwIGYmFy')
+    True
+    >>> k3.kind
+    u'Foo'
+    >>> k3.id
+    u'bar'
+    >>> avro.cast('BkZvbwIGYmFy', Key)
+    key('BkZvbwIGYmFy')
+    """
+
+    __slots__ = ('_encoded', )
+
+    ## There are lots of Keys; intern them to avoid some object
+    ## allocation.
+
+    INTERNED = weakref.WeakValueDictionary()
+
+    def __new__(cls, encoded):
+        encoded = str(encoded)
+        try:
+            return cls.INTERNED[encoded]
+        except KeyError:
+            return cls._decode(encoded)
+
+    ## By default, the constructor would set self.kind to the first
+    ## argument given.  Do nothing, initialization happens in make().
+
+    def __init__(self, encoded):
+        pass
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, str(self))
+
+    def __str__(self):
+        if self._encoded is None:
+            self._encoded = self._encode()
+        return self._encoded
+
+    def __json__(self):
+        return str(self)
+
+    ## Most of the time, a Key is treated opaquely.  Use its string
+    ## representation for hashing and equality.
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other):
+        if isinstance(other, Key):
+            return (self.kind == other.kind and self.id == other.id)
+        elif isinstance(other, basestring):
+            return str(self) == other
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, (basestring, Key)):
+            return not self == other
+        return NotImplemented
+
+    ## Since Keys are interned, copying is a no-op.
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, memo):
+        return self
+
+    @classmethod
+    def __adapt__(cls, obj):
+        if isinstance(obj, basestring):
+            return cls(obj)
+        elif isinstance(obj, dict):
+            return cls.__restore__(obj)._intern()
+
+    ## Extra properties
+
+    @property
+    def type(self):
+        return avro.get_type(self.kind)
+
+    ## Creating a Key directly is unusual, so make() is a second-class
+    ## constructor
+
+    @classmethod
+    def make(cls, kind, id=None, name=None):
+        self = object.__new__(cls)
+        if not isinstance(kind, basestring):
+            kind = avro.type_name(kind, True)
+        self.kind = avro.string(kind)
+        if name is not None:
+            self.id = avro.string(name)
+        else:
+            self.id = avro.cast(id, _id) if id else _uuid(uuid.uuid4().bytes)
+        return self._intern()
+
+    def _intern(self):
+        self._encoded = None
+        return self.INTERNED.setdefault(str(self), self)
+
+    ## Use a base64 encoded binary Avro value as the opaque
+    ## representation.
+
+    @classmethod
+    def _decode(cls, enc):
+        pad = len(enc) % 4
+        enc = str(enc) + '=' * (4 - pad) if pad else enc
+        data = base64.urlsafe_b64decode(enc)
+        return avro.loads_binary(data, cls=cls, unbox=None, header=False)
+
+    def _encode(self):
+        data = avro.dumps_binary(self, box=None, header=False)
+        return base64.urlsafe_b64encode(data).rstrip('=')
+
+class _uuid(avro.fixed('M.uuid')):
+    """The id field of most keys is a uuid."""
+
+class _id(avro.union(_uuid, avro.string)):
+    """But it may also be a name."""
+
+## Keys map to references in the static space.
 
 class Reference(object):
     """A Reference is an object that has an address (i.e. key)."""
