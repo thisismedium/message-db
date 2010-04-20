@@ -266,18 +266,20 @@ class repository(zipper):
     >>> r = repository(store.back.memory()).create().open()
     >>> b = r.branch('foo').create().open()
     >>> print '\\n'.join(str(c) for c in commits(r))
-    <commit Anonymous <nobody@example.net> ...: "Add branch 'foo'.">
+    <commit Anonymous <nobody@example.net> ...: "Add branch u'foo'.">
     <commit Anonymous <nobody@example.net> ...>
     >>> list(r.branches())
     [(u'foo', branch(author=u'Anonymous <nobody@example.net>', config=map<string>([])))]
+    >>> b.config
+    branch(author=u'Anonymous <nobody@example.net>', config=map<string>([]))
     >>> b.transactionally(b.checkpoint, { Key.make('T', 'a'): u'a-value' }).items()
     tree([(key('AlQCAmE'), u'a-value')])
     """
 
     def branch(self, name):
-        name = str(name)
+        key = Key.make(Branch, name)
         state = store.back.prefixed(self._state, self._qualify(name))
-        return branch(name, self, state, self._objects)
+        return branch(key, self, state, self._objects)
 
     def branches(self):
         return ((k.id, v) for (k, v) in self.find(Branch))
@@ -296,12 +298,11 @@ class repository(zipper):
 
     def _add(self, branch):
         with message('Add branch %r.' % branch.name):
-            key = Key.make(Branch, branch.name)
-            return self.commit({ key: self._config(branch) })
+            return self.commit({ branch.key: self._config(branch) })
 
     def _remove(self, branch):
         with message('Remove branch %r.' % branch.name):
-            return self.commit({ Key.make(Branch, branch.name): Deleted })
+            return self.commit({ branch.key: Deleted })
 
     def _qualify(self, name):
         if not name.startswith('refs/'):
@@ -315,13 +316,21 @@ class branch(zipper):
     """A branch keeps state in a private keyspace and uses a common
     static space shared among all branches in a repository."""
 
-    def __init__(self, name, repo, *args, **kw):
+    def __init__(self, key, repo, *args, **kw):
         super(branch, self).__init__(*args, **kw)
-        self.name = name
+        self.key = key
         self.repo = repo
 
     def __repr__(self):
         return '%s(%r, %r)' % (type(self).__name__, self.name, self.repo)
+
+    @property
+    def name(self):
+        return self.key.id
+
+    @property
+    def config(self):
+        return self.repo.get(self.key)
 
     def create(self):
         self.repo.add(super(branch, self).create())
