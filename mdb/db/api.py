@@ -89,7 +89,13 @@ class _Branch(object):
         return val and val.update(_key=_tree.Key(key))
 
     def mget(self, keys):
-        for (key, val) in self._zs.mget(keys):
+        return self._mget(self._zs.mget, keys)
+
+    def find(self, *args):
+        return self._mget(self._zs.find, *args)
+
+    def _mget(self, op, *args):
+        for (key, val) in op(*args):
             yield val and val.update(_key=_tree.Key(key))
 
     def begin(self, message):
@@ -100,14 +106,6 @@ class _Branch(object):
             changes = self._persist(delta)
             self._zs.end_transaction(mark, self._zs.checkpoint(changes))
         return self
-
-    def find(self, cls):
-        return get(self._scan(cls), self)
-
-    def _scan(self, cls):
-        for key in self._zs:
-            if issubclass(_tree.Key(key).type, cls):
-                yield key
 
     def _persist(self, delta):
         for key in delta:

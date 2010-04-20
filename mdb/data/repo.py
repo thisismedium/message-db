@@ -4,7 +4,7 @@
 """repo -- versioned key/value datastore"""
 
 from __future__ import absolute_import
-import os, datetime, weakref, time, uuid, base64
+import os, operator, datetime, weakref, time, uuid, base64
 from md.prelude import *
 from md import abc, fluid
 from . import store, avro
@@ -51,10 +51,12 @@ class zipper(object):
     lightweight than normal commits because their changesets are
     simply deltas against the last commit's manifest.
 
-    >>> zs.transactionally(zs.checkpoint, a=1, b=2).items()
-    tree([('a', 1), ('b', 2)])
-    >>> zs.transactionally(zs.checkpoint, a=Deleted, b=3, c=4).items()
-    tree([('b', 3), ('c', 4)])
+    >>> k = lambda name: Key.make('T', name)
+    >>> zs.transactionally(zs.checkpoint, { k('a'): 1, k('b'): 2 }).items()
+    tree([(key('AlQCAmE'), 1), (key('AlQCAmI'), 2)])
+
+    >>> zs.transactionally(zs.checkpoint, { k('a'): Deleted, k('b'): 3, k('c'): 4 }).items()
+    tree([(key('AlQCAmI'), 3), (key('AlQCAmM'), 4)])
     >>> print '\\n'.join(repr(c) for c in checkpoints(zs))
     <checkpoint Anonymous <nobody@example.net> ...>
     <checkpoint Anonymous <nobody@example.net> ...>
@@ -63,8 +65,9 @@ class zipper(object):
     To replace the top checkpoint without leaving history, use the
     variant zipper.amend().
 
-    >>> zs.transactionally(zs.amend, b=-3).items()
-    tree([('b', -3), ('c', 4)])
+    >>> zs.transactionally(zs.amend, { k('b'): -3 }).items()
+    tree([(key('AlQCAmI'), -3), (key('AlQCAmM'), 4)])
+
     >>> print '\\n'.join(repr(c) for c in checkpoints(zs))
     <checkpoint Anonymous <nobody@example.net> ...>
     <checkpoint Anonymous <nobody@example.net> ...>
@@ -75,8 +78,8 @@ class zipper(object):
     is created.  Commits are shared with other zippers.  Once a commit
     is made, it cannot be undone.
 
-    >>> zs.transactionally(zs.commit, d=5).items()
-    tree([('b', -3), ('c', 4), ('d', 5)])
+    >>> zs.transactionally(zs.commit, { k('d'): 5 }).items()
+    tree([(key('AlQCAmI'), -3), (key('AlQCAmM'), 4), (key('AlQCAmQ'), 5)])
     >>> print '\\n'.join(repr(c) for c in commits(zs))
     <commit Anonymous <nobody@example.net> ...>
     <commit Anonymous <nobody@example.net> ...>
@@ -156,6 +159,14 @@ class zipper(object):
         for (addr, value) in self._mget(amap):
             yield (amap[addr], value)
 
+    def find(self, cls):
+        return self.mget(self._scan(cls))
+
+    def _scan(self, cls):
+        for key in self:
+            if issubclass(Key(key).type, cls):
+                yield key
+
     def deref(self, ref):
         return self._get(ref.address)
 
@@ -192,18 +203,18 @@ class zipper(object):
         except store.NotStored:
             raise TransactionFailed('Try again.')
 
-    def amend(self, seq=(), **kw):
-        refs = mref(self, chain_items(seq, kw))
+    def amend(self, delta):
+        refs = mref(self, delta)
         changes = make_changeset(self._manifest, self._changes, refs)
         return amend_checkpoint(self, changes)
 
-    def checkpoint(self, seq=(), **kw):
-        refs = mref(self, chain_items(seq, kw))
+    def checkpoint(self, delta):
+        refs = mref(self, delta)
         changes = make_changeset(self._manifest, self._changes, refs)
         return next_checkpoint(self, changes)
 
-    def commit(self, seq=(), **kw):
-        refs = mref(self, chain_items(seq, kw))
+    def commit(self, delta):
+        refs = mref(self, delta)
         manifest = make_manifest(self._manifest, self._changes, refs)
         return empty_checkpoint(self, next_commit(self, manifest))
 
@@ -257,8 +268,10 @@ class repository(zipper):
     >>> print '\\n'.join(str(c) for c in commits(r))
     <commit Anonymous <nobody@example.net> ...: "Add branch 'foo'.">
     <commit Anonymous <nobody@example.net> ...>
-    >>> b.transactionally(b.checkpoint, a=u'a-value').items()
-    tree([('a', u'a-value')])
+    >>> list(r.branches())
+    [(u'foo', branch(author=u'Anonymous <nobody@example.net>', config=map<string>([])))]
+    >>> b.transactionally(b.checkpoint, { Key.make('T', 'a'): u'a-value' }).items()
+    tree([(key('AlQCAmE'), u'a-value')])
     """
 
     def branch(self, name):
@@ -267,7 +280,7 @@ class repository(zipper):
         return branch(name, self, state, self._objects)
 
     def branches(self):
-        return list(self.branch(n) for n in self._branches())
+        return ((k.id, v) for (k, v) in self.find(Branch))
 
     def add(self, branch):
         return self.transactionally(self._add, branch)
@@ -276,22 +289,19 @@ class repository(zipper):
         return self.transactionally(self._remove, branch)
 
     def _create(self):
-        return init_commit(self, branches=BranchMap())
+        return init_commit(self)
 
     def _branches(self):
         return self.get('branches')
 
     def _add(self, branch):
         with message('Add branch %r.' % branch.name):
-            branches = self._branches().copy()
-            branches[branch.name] = self._config(branch)
-            return self.commit(branches=branches)
+            key = Key.make(Branch, branch.name)
+            return self.commit({ key: self._config(branch) })
 
     def _remove(self, branch):
         with message('Remove branch %r.' % branch.name):
-            branches = self._branches().copy()
-            del branches[branch.name]
-            return self.commit(branches=branches)
+            return self.commit({ Key.make(Branch, branch.name): Deleted })
 
     def _qualify(self, name):
         if not name.startswith('refs/'):
@@ -332,8 +342,6 @@ avro.require('repo.json')
 
 class Branch(avro.structure('M.branch')):
     """Branch configuration is stored in the repository."""
-
-BranchMap = avro.map(Branch)
 
 BranchConfig = avro.map(avro.string)
 
@@ -400,6 +408,13 @@ class Key(avro.structure('M.key', weak=True)):
     def __json__(self):
         return str(self)
 
+    ## Define encode() to allow the avro DatumWriter to write this as
+    ## a string.
+
+    def encode(self, encoding):
+        assert encoding == 'utf-8', 'Expected UTF-8, not: %r.' % encoding
+        return str(self)
+
     ## Most of the time, a Key is treated opaquely.  Use its string
     ## representation for hashing and equality.
 
@@ -407,15 +422,28 @@ class Key(avro.structure('M.key', weak=True)):
         return hash(str(self))
 
     def __eq__(self, other):
-        if isinstance(other, Key):
-            return (self.kind == other.kind and self.id == other.id)
-        elif isinstance(other, basestring):
-            return str(self) == other
-        return NotImplemented
+        return self._compare(operator.eq, other)
 
     def __ne__(self, other):
-        if isinstance(other, (basestring, Key)):
-            return not self == other
+        return self._compare(operator.ne, other)
+
+    def __lt__(self, other):
+        return self._compare(operator.lt, other)
+
+    def __le__(self, other):
+        return self._compare(operator.le, other)
+
+    def __gt__(self, other):
+        return self._compare(operator.gt, other)
+
+    def __ge__(self, other):
+        return self._compare(operator.ge, other)
+
+    def _compare(self, op, other):
+        if isinstance(other, Key):
+            other = str(other)
+        if isinstance(other, basestring):
+            return op(str(self), other)
         return NotImplemented
 
     ## Since Keys are interned, copying is a no-op.
@@ -581,9 +609,27 @@ message = fluid.accessor(MESSAGE)
 ## checkpoints use changesets.  A manifest is a complete snapshot of
 ## the space; a changeset is a delta.
 
-manifest = avro.map(sref)
+class RefMap(tree):
 
-changeset = avro.map(sref)
+    @classmethod
+    def __adapt__(cls, other):
+        if isinstance(obj, Mapping):
+            obj = obj.iteritems()
+        if not isinstance(obj, basestring) and isinstance(obj, Iterable):
+            values = cls.type
+            return (cls((Key, k), avro.cast(v, values)) for (k, v) in obj)
+
+    def __getstate__(self):
+        return self
+
+    def __setstate__(self, state):
+        self.update(state)
+
+refmap = avro.map(sref, base=RefMap)
+
+manifest = refmap
+
+changeset = refmap
 
 ## Each checkpoint or commit refers to previous ones.
 

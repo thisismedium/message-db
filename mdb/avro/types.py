@@ -235,8 +235,9 @@ def complex_name(kind, *values):
 ## may be written in random order and equal objects would not hash to
 ## the same value.
 
-def map(values):
-    return mapping(complex_name('map', values), Map, values, _s.MapSchema)
+def map(values, base=None):
+    base = base or Map
+    return mapping(complex_name('map', values), base, values, _s.MapSchema)
 
 def adapt_map(cls, obj):
     if isinstance(obj, Mapping):
@@ -248,12 +249,18 @@ def adapt_map(cls, obj):
 class Map(tree):
     __adapt__ = classmethod(adapt_map)
 
+    def __getstate__(self):
+        return self
+
 ## The Avro doesn't include support for ordered maps, but the db
 ## package needs them to represent a Folder's children.
 
 class OMap(omap):
 
     __adapt__ = classmethod(adapt_map)
+
+    def __getstate__(self):
+        return self
 
     def __json__(self):
         return self.iteritems()
@@ -269,8 +276,7 @@ def mapping(kind, base, values, schema):
             'type': values,
             '__module__': __name__,
             '__kind__': kind,
-            '__schema__': mapping_schema(schema, values),
-            '__getstate__': lambda s: s
+            '__schema__': mapping_schema(schema, values)
         }))
 
 def mapping_schema(cls, values):
