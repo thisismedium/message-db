@@ -33,9 +33,9 @@ def get(key, zs=None):
     if key is None or isinstance(key, _tree.Content):
         return key
     elif isinstance(key, (basestring, _tree.Key)):
-        return (zs or branch()).get(str(key))
+        return (zs or branch()).get(_tree.Key(key))
     else:
-        return (zs or branch()).mget(str(k) for k in key)
+        return (zs or branch()).mget(_tree.Key(k) for k in key)
 
 def find(cls):
     return branch().find(cls)
@@ -130,7 +130,7 @@ class _Delta(object):
 
     def changed(self, *objects):
         for obj in objects:
-            self._data[str(obj.key)] = obj
+            self._data[obj.key] = obj
         return obj
 
     def get(self, key):
