@@ -17,12 +17,12 @@ __all__ = ('init', 'backing', 'loader')
 def init(app_id, path=None, load=None, create=None,
          auth=None, service=None, host=None):
 
-    zs = zipper(app_id, path)
+    zs = repo(app_id, path)
     created = not zs.exists()
     if created:
         zs.create()
 
-    api.init_api(zs)
+    api.init_api(zs, created)
     auth_.init_auth(auth, service=service, host=host)
     if created:
         load and loader(load)
@@ -30,8 +30,8 @@ def init(app_id, path=None, load=None, create=None,
 
     return zs
 
-def zipper(app_id, path):
-    return data.zipper(backing(path), author=auth_.author)
+def repo(app_id, path):
+    return data.repository(backing(path), author=auth_.author)
 
 
 ### Extensible initialization

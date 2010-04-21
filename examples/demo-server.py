@@ -53,9 +53,8 @@ def start(data, load):
     xmpp.start([xmpp.TCPServer(server).bind('127.0.0.1', 5222)])
 
 def setup():
-    with db.user_delta('Create users') as delta:
+    with db.user_transaction('Create users'):
         db.make_user(name='user', password='secret', email='user@localhost')
-        delta.checkpoint()
 
 class QueryServer(xmpp.Plugin):
 
@@ -65,6 +64,8 @@ class QueryServer(xmpp.Plugin):
     @xmpp.stanza('presence')
     def presence(self, elem):
         """No-op on presence so strophe doesn't fail."""
+
+    ## Content
 
     @xmpp.iq('{urn:M}item')
     def M_item(self, iq):
@@ -88,14 +89,15 @@ class QueryServer(xmpp.Plugin):
         yield folder
 
     def set_item_save(self, data):
-        yield db.save(db.resolve(data['_path']), without_underscores(data))
+        yield db.save(self._item(data), without_underscores(data))
 
     def set_item_remove(self, data):
-        yield db.remove(db.resolve(data['_path']))
+        yield db.remove(self._item(data))
 
-    @xmpp.iq('{urn:M}query')
-    def M_query(self, iq):
-        return self._dispatch(iq)
+    def _item(self, data):
+        return db.resolve(data['_path'])
+
+    ## Schema
 
     @xmpp.iq('{urn:M}schema')
     def message_schema(self, iq):
@@ -106,6 +108,8 @@ class QueryServer(xmpp.Plugin):
         match = hashlib.md5(result).hexdigest()
         return self._result(iq, result, match=match)
 
+    ## Users
+
     @xmpp.iq('{urn:M}user')
     def message_user(self, iq):
         return self._dispatch(iq)
@@ -114,7 +118,7 @@ class QueryServer(xmpp.Plugin):
         return self._dumps(iq, db.get_user(data) if data else db.list_users())
 
     def set_user(self, iq, data):
-        return self._change('set_user', iq, data, db.delta, 'update users')
+        return self._change('set_user', iq, data, db.user_transaction, 'update users')
 
     def set_user_create(self, data):
         kind = data.get('_kind')
@@ -122,11 +126,44 @@ class QueryServer(xmpp.Plugin):
         yield db.make_user(kind and db.get_type(kind), **attr)
 
     def set_user_save(self, data):
-        yield db.save_user(db.get(data['_key']), without_underscores(data))
+        yield db.save_user(self._user(data), without_underscores(data))
 
     def set_user_remove(self, data):
-        db.remove_user(db.get(data['_key']))
+        db.remove_user(self._user(data))
         return ()
+
+    def _user(self, data):
+        return db.get(data['_key'])
+
+    ## Branches
+
+    @xmpp.iq('{urn:M}branch')
+    def message_branch(self, iq):
+        return self._dispatch(iq)
+
+    def get_branch(self, iq, data):
+        return self._dumps(iq, db.get_branch(data) if data else db.branches())
+
+    def set_branch(self, iq, data):
+        return self._change('set_branch', iq, data, db.repository_transaction, 'update branches')
+
+    def set_branch_create(self, data):
+        name = data.pop('_name')
+        attr = dict(without_underscores(data))
+        yield db.make_branch(name, **attr)
+
+    def set_branch_save(self, data):
+        yield db.save_branch(self._branch(data), without_underscores(data))
+
+    def set_branch_remove(self, data):
+        db.remove_branch(self._branch(data))
+        return ()
+
+    def _branch(self, data):
+        key = data.get('_key')
+        return db.get(key) if key else db.get_branch(data['_name'])
+
+    ## Private
 
     def _dispatch(self, iq):
         """Something resembling an HTTP method dispatcher."""
@@ -161,7 +198,7 @@ class QueryServer(xmpp.Plugin):
                     raise ValueError('Bad action: %r.' % action)
                 for affected in method(action['data']):
                     result.setdefault(affected.key, affected)
-            d.checkpoint()
+            d and d.checkpoint()
         return self._dumps(iq, result.values())
 
     def _result(self, iq, data, **attr):

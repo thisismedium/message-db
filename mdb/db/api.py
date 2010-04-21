@@ -7,22 +7,43 @@ from __future__ import absolute_import
 from md.prelude import *
 from md import fluid
 from .. import avro, data
-from . import _tree
 
-__all__ = ('branch', 'get', 'find', 'new', 'update', 'delete', 'delta')
+__all__ = (
+    'RepoError', 'repository', 'repository_transaction', 'source', 'use',
+    'branches', 'make_branch', 'open_branch', 'get_branch', 'save_branch',
+    'remove_branch',
+    'get', 'find', 'new', 'update', 'delete', 'delta'
+)
 
-## The current branch is accessible in the dynamic context.  It can be
-## set globally using the init() method.
+RepoError = data.RepoError
 
-BRANCH = fluid.cell(None, type=fluid.acquired)
-branch = fluid.accessor(BRANCH)
+## The current branch and repository are accessible in the dynamic
+## context.  They can be set globally using the init() method.
 
-def init_api(zs):
+REPOSITORY = fluid.cell(None, type=fluid.acquired)
+repository = fluid.accessor(REPOSITORY)
+
+SOURCE = fluid.cell(None, type=fluid.acquired)
+source = fluid.accessor(SOURCE)
+
+def init_api(zs, created=False):
     """Set the global branch; this should be done near the beginning
     of a program.  See load.init()."""
 
-    BRANCH.set(_Branch(zs.open()))
+    REPOSITORY.set(zs.open())
+    if created:
+        with repository_transaction('Make initial branches.'):
+            make_branch('live', publish='')
+            make_branch('staging', publish='live')
+
+    use('staging')
+
     return zs
+
+def use(name):
+    branch = open_branch(name)
+    SOURCE.set(branch)
+    return branch
 
 def get(key, zs=None):
     """Resolve a key or sequence of keys.  If a key cannot be
@@ -30,42 +51,80 @@ def get(key, zs=None):
     sequence of keys is not guaranteed to keep its objects in the
     key-order; this may be changed in the future."""
 
-    if key is None or isinstance(key, _tree.Content):
+    if key is None or isinstance(key, data.Value):
         return key
-    elif isinstance(key, (basestring, _tree.Key)):
-        return (zs or branch()).get(_tree.Key(key))
+    elif isinstance(key, (basestring, data.Key)):
+        return best(zs).get(data.Key(key))
     else:
-        return (zs or branch()).mget(_tree.Key(k) for k in key)
+        return best(zs).mget(data.Key(k) for k in key)
 
-def find(cls):
-    return branch().find(cls)
+def find(cls, zs=None):
+    return best(zs).find(cls)
+
+def best(zs):
+    src = source()
+    if zs is None:
+        return src
+    if isinstance(src, _Delta) and src._zs == zs:
+        return src
+    return zs
+
+
+### Branches
+
+## Branch descriptors are stored in the repository.  They behave
+## similarly to Users and other content types.  Making new branches is
+## the exception because additional work as to be done to create() the
+## branch before a descriptor is made.
+
+def branches():
+    return repository().branches()
+
+def make_branch(name, force=True, owner=None, **kw):
+    zs = repository()
+    if owner and not isinstance(owner, basestring):
+        owner = owner.name
+    setdefault(kw, publish='staging', owner=owner)
+    return update(zs.configure(zs.branch(name).create(force=force), **kw))
+
+def open_branch(name):
+    return repository().branch(name).open()
+
+def get_branch(name):
+    return repository().branch(name).config
+
+def save_branch(config, *args, **kw):
+    return update(config.update(*args, **kw))
+
+def remove_branch(config):
+    return delete(config.key)
 
 
 ### Changes
 
 def new(*args):
-    return branch().new(*args)
+    return source().new(*args)
 
 def update(*args):
-    return branch().changed(*args)
+    return source().changed(*args)
 
 def delete(key):
     """A low-level method for deleting the item associated with a key.
     If you want to delete an item in the content tree, use
     tree.remove() instead."""
 
-    if isinstance(key, _tree.Content):
+    if isinstance(key, data.Value):
         key = key.key
-    if isinstance(key, (basestring, _tree.Key)):
-        branch().delete(key)
+    if isinstance(key, (basestring, data.Key)):
+        source().delete(key)
     else:
-        for k in key: branch().delete(k)
+        for k in key: source().delete(k)
 
-## A branch is updated transactionally by passing it a changeset.  The
-## delta() method establishes a "shadow" branch in its dynamic extend
+## A source is updated transactionally by passing it a changeset.  The
+## delta() method establishes a "shadow" source in its dynamic extend
 ## that collects changes made to the content tree.  At the end of the
-## context, the checkpoint() method can be used to write the changes
-## to the branch.
+## context, a method like checkpoint() can be used to write the
+## changes to the source.
 
 @contextmanager
 def delta(message, zs=None):
@@ -73,60 +132,32 @@ def delta(message, zs=None):
     Methods that use branch() (such as get()) will use this delta
     instead."""
 
-    delta = (zs or branch()).begin(message)
-    with branch(delta):
+    delta = _Delta(message, best(zs))
+    with source(delta):
         yield delta
 
-class _Branch(object):
-    """A _Branch is a thin wrapper that acts as an interface between
-    this api and the data api."""
-
-    def __init__(self, zs):
-        self._zs = zs
-
-    def get(self, key):
-        val = self._zs.get(key)
-        return val and val.update(_key=_tree.Key(key))
-
-    def mget(self, keys):
-        return self._mget(self._zs.mget, keys)
-
-    def find(self, *args):
-        return self._mget(self._zs.find, *args)
-
-    def _mget(self, op, *args):
-        for (key, val) in op(*args):
-            yield val and val.update(_key=_tree.Key(key))
-
-    def begin(self, message):
-        return _Delta(message, self, self._zs.begin_transaction())
-
-    def checkpoint(self, mark, message, delta):
-        with data.message(message):
-            changes = self._persist(delta)
-            self._zs.end_transaction(mark, self._zs.checkpoint(changes))
-        return self
-
-    def _persist(self, delta):
-        for key in delta:
-            if delta[key] is Undefined:
-                delta[key] = data.Deleted
-        return delta
+@contextmanager
+def repository_transaction(message):
+    with delta(message, repository()) as d:
+        yield
+        try:
+            d.commit()
+        except Exception:
+            print 'FAILED', d._data
+            raise
 
 class _Delta(object):
     """A delta is a set of changes about to be committed to a
     zipper."""
 
-    def __init__(self, message, source, mark):
+    def __init__(self, message, zs):
         self._message = message
-        self._source = source
+        self._zs = zs
         self._data = {}
-        self._mark = mark
+        self._mark = zs.begin_transaction()
 
     def new(self, cls, state):
-        key = (state.pop('key', None)
-               or _tree.Key.make(cls, state.pop('key_name', None)))
-        return self.changed(cls(**state).update(_key=key))
+        return self.changed(self._zs.new(cls, state))
 
     def changed(self, *objects):
         for obj in objects:
@@ -136,7 +167,7 @@ class _Delta(object):
     def get(self, key):
         if key in self._data:
             return self._data[key]
-        return self._source.get(key)
+        return self._zs.get(key)
 
     def mget(self, keys):
         need = []
@@ -149,12 +180,26 @@ class _Delta(object):
                 need.append(key)
 
         if need:
-            for obj in self._source.mget(need):
+            for obj in self._zs.mget(need):
                 yield obj
 
     def delete(self, key):
         self._data[key] = Undefined
 
     def checkpoint(self):
-        self._source.checkpoint(self._mark, self._message, self._data)
+        return self._end(self._zs.checkpoint)
+
+    def commit(self):
+        return self._end(self._zs.commit)
+
+    def _end(self, method):
+        with data.message(self._message):
+            self._zs.end_transaction(self._mark, method(self._persist()))
         return self
+
+    def _persist(self):
+        delta = self._data
+        for key in delta:
+            if delta[key] is Undefined:
+                delta[key] = data.Deleted
+        return delta

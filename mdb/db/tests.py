@@ -7,7 +7,7 @@ from __future__ import absolute_import
 import os, unittest, sasl
 from md.prelude import *
 from .. import avro
-from . import *; from . import _tree
+from . import *
 
 def load_test_data():
     data = os.path.join(os.path.dirname(__file__), 'test')
@@ -23,12 +23,12 @@ class TestTree(unittest.TestCase):
         key = self.root.key
         data = unicode(self.root.key)
         self.assertEqual(avro.cast(data, Key), key)
-        self.assertEqual(avro.cast(data, _tree._folder), key)
+        self.assertEqual(avro.cast(data, tree._folder), key)
 
 
     def test_root(self):
         self.assertEqual(self.root.name, 'test')
-        self.assertEqual(type(self.root.contents), _tree._content)
+        self.assertEqual(type(self.root.contents), tree._content)
         self.assertEqual(self.root.contents.keys(), ['about', 'news'])
         self.assertEqual(str(self.root.key), str(self.root.child('about').folder))
 
@@ -112,10 +112,9 @@ class TestAuth(unittest.TestCase):
         self.zs = init('test', 'memory:', create=self._create)
 
     def _create(self):
-        with user_delta('Add users') as d:
+        with user_transaction('Add users'):
             self.foo = make_user(name='foo', email='foo@example.net', password='secret')
             self.bar = make_user(name='bar', email='bar@example.net', password='terces', admin=True)
-            d.checkpoint()
 
     def test_props(self):
         self.assertEqual(repr(self.foo), 'foo <foo@example.net>')
@@ -124,14 +123,13 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(is_admin(self.bar), True)
 
     def test_create(self):
-        with user_delta('Create baz') as d:
+        with user_transaction('Create baz'):
             baz = make_user(name='baz', email='baz@example.net', password='hidden')
-            d.checkpoint()
 
         self.assertEqual(avro.dumps(baz),
-                         '{"_key": "DE0uVXNlcgIGYmF6", "_kind": "User", "admin": false, "email": "baz@example.net", "full_name": "", "name": "baz", "password": "", "roles": []}')
+                         '{"_key": "DE0uVXNlcgIGYmF6", "_kind": "User", "admin": false, "branch": "baz", "email": "baz@example.net", "full_name": "", "name": "baz", "password": "", "roles": []}')
 
-        with user_delta('Create baz') as d:
+        with user_transaction('Create baz'):
             self.assertRaises(NameError, lambda: make_user(name='Baz', email='baz@example.net', password='hidden'))
 
     def test_get(self):
@@ -144,23 +142,20 @@ class TestAuth(unittest.TestCase):
                          ['bar', 'foo'])
 
     def test_update(self):
-        with user_delta('Update foo') as d:
+        with user_transaction('Update foo'):
             save_user(self.foo, admin=True, password='new-password')
-            d.checkpoint()
 
         self.assertEqual(avro.dumps(self.foo),
-                         '{"_key": "DE0uVXNlcgIGZm9v", "_kind": "User", "admin": true, "email": "foo@example.net", "full_name": "", "name": "foo", "password": "", "roles": []}')
+                         '{"_key": "DE0uVXNlcgIGZm9v", "_kind": "User", "admin": true, "branch": "foo", "email": "foo@example.net", "full_name": "", "name": "foo", "password": "", "roles": []}')
 
         foo = get_user('foo')
         self.assertEqual(is_admin(foo), True)
         self.assertEqual(str(foo.password), '{DIGEST-MD5}236856eb15d36cadb24338d244d2fa26')
 
     def test_remove(self):
-        with user_delta('Delete bar') as d:
+        with user_transaction('Delete bar'):
             remove_user(self.bar)
             self.assertRaises(NameError, lambda: remove_user(self.bar))
-            d.checkpoint()
-
         self.assertEqual(get_user('bar'), Undefined)
 
     def test_login(self):
@@ -194,3 +189,74 @@ class TestAuth(unittest.TestCase):
             lambda: authenticator().service_type(),
             lambda: authenticator().host()
         )
+
+class TestBranch(unittest.TestCase):
+
+    def setUp(self):
+        self.zs = init('test', 'memory:')
+
+    def _branches(self, *names):
+        self.assertEqual(list(names), sorted(b.name for b in branches()))
+
+    def _json(self, name, data):
+        self.assertEqual(avro.dumps(get_branch(name)), data)
+
+    def test_list(self):
+        self._branches('live', 'staging')
+
+    def test_get(self):
+        self._json('staging', '{"_key": "EE0uYnJhbmNoAg5zdGFnaW5n", "_kind": "branch", "_name": "staging", "config": {}, "owner": "anonymous", "publish": "live"}')
+
+    def test_save(self):
+        with repository_transaction('Update "staging".'):
+            save_branch(get_branch('staging'), owner='foo')
+        self._json('staging', '{"_key": "EE0uYnJhbmNoAg5zdGFnaW5n", "_kind": "branch", "_name": "staging", "config": {}, "owner": "foo", "publish": "live"}')
+
+    def test_remove(self):
+        with repository_transaction('Remove "live".'):
+            remove_branch(get_branch('staging'))
+
+        self._branches('live')
+        with repository_transaction('Make "staging".'):
+            api.make_branch('staging')
+        self._branches('live', 'staging')
+
+    def test_use(self):
+        self.assertEqual('staging', source().name)
+        self.assertEqual('live', source().publish)
+
+        use('live')
+        self.assertEqual('live', source().name)
+        self.assertEqual('', source().publish)
+
+        self.assertRaises(RepoError, lambda: use('foo'))
+
+    def test_user(self):
+
+        ## Check that creating a user creates a branch as well.
+        with user_transaction('Make "foo" user.'):
+            foo = make_user(name='foo', email='foo@example.net', password='secret')
+        self._branches('foo', 'live', 'staging')
+
+        ## Make sure the branch and user have references to each
+        ## other.
+        self.assertEqual('foo', foo.branch)
+        fb = open_branch(foo.branch)
+        self.assertEqual('foo', fb.owner)
+        self.assertEqual('staging', fb.publish)
+
+        ## Add some data to the new branch.
+        use('foo')
+        with delta('Add "foo" data.') as d:
+            make(Item, name='a')
+            d.checkpoint()
+        self.assertEqual(['a'], list(i.name for i in source().find(Item)))
+
+        ## Make another user; force it to share the "foo" branch.
+        with user_transaction('Make "bar" user.'):
+            bar = make_user(name='bar', email='bar@example.net', password='secret', branch='foo')
+        self._branches('foo', 'live', 'staging')
+
+        ## Verify that that the original branch wasn't destroyed.
+        use('foo')
+        self.assertEqual(['a'], list(i.name for i in source().find(Item)))

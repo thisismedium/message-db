@@ -4,13 +4,14 @@
 """repo -- versioned key/value datastore"""
 
 from __future__ import absolute_import
-import os, operator, datetime, weakref, time, uuid, base64
+import os, copy, datetime, weakref, time
 from md.prelude import *
 from md import abc, fluid
 from . import store, avro
+from .value import *
 
 __all__ = (
-    'RepoError', 'TransactionError', 'TransactionFailed', 'zipper', 'Key',
+    'RepoError', 'TransactionError', 'TransactionFailed', 'zipper',
     'repository', 'branch', 'message', 'Deleted'
 )
 
@@ -127,44 +128,58 @@ class zipper(object):
             self._objects.close()
         return self
 
-    def create(self):
+    def create(self, force=False):
         if self.is_open():
-            raise RepoError('Cannot create an open repository.')
+            raise RepoError('Cannot create an open %s.' % type(self).__name__)
         try:
             self._open()
             head = refput(self, empty_checkpoint(self, self._create()))
-            self._state.add(self.HEAD, head)
+            op = self._state.set if force else self._state.add
+            op(self.HEAD, head)
             return self
         except store.NotStored:
-            raise RepoError('Repository already exists.')
+            raise store.NotStored(
+                '%s already exists.' % type(self).__name__.title()
+            )
 
     def destroy(self):
         self._state.delete(self.HEAD)
         self.close()
 
+    def new(self, cls, state):
+        key = (state.pop('key', None)
+               or Key.make(cls, state.pop('key_name', None)))
+        return cls(**state).update(_key=key)
+
     def get(self, key):
         addr = self._address(key)
         if addr is Undefined:
             return Undefined
-        return self._get(addr)
+        return update(self._get(addr), _key=key)
 
     def mget(self, keys):
-        amap = {}
+        amap = ddict(list)
         for key in keys:
             addr = self._address(key)
             if addr is Undefined:
                 yield (key, Undefined)
                 continue
-            amap[addr] = key
+            amap[addr].append(key)
         for (addr, value) in self._mget(amap):
-            yield (amap[addr], value)
+            keys = amap[addr]
+            if len(keys) == 1:
+                yield update(value, _key=keys[0])
+            else:
+                for key in keys:
+                    yield update(copy.copy(value), _key=key)
 
     def find(self, cls):
         return self.mget(self._scan(cls))
 
     def _scan(self, cls):
         for key in self:
-            if issubclass(Key(key).type, cls):
+            key = Key(key)
+            if issubclass(key.type, cls):
                 yield key
 
     def deref(self, ref):
@@ -264,14 +279,14 @@ class repository(zipper):
        static space: objects/...
 
     >>> r = repository(store.back.memory()).create().open()
-    >>> b = r.branch('foo').create().open()
+    >>> b = r.make('foo').open()
     >>> print '\\n'.join(str(c) for c in commits(r))
-    <commit Anonymous <nobody@example.net> ...: "Add branch u'foo'.">
+    <commit Anonymous <nobody@example.net> ...: u'Add branch foo.'>
     <commit Anonymous <nobody@example.net> ...>
     >>> list(r.branches())
-    [(u'foo', branch(author=u'Anonymous <nobody@example.net>', config=map<string>([])))]
+    [<M.branch foo>]
     >>> b.config
-    branch(author=u'Anonymous <nobody@example.net>', config=map<string>([]))
+    <M.branch foo>
     >>> b.transactionally(b.checkpoint, { Key.make('T', 'a'): u'a-value' }).items()
     tree([(key('AlQCAmE'), u'a-value')])
     """
@@ -282,10 +297,16 @@ class repository(zipper):
         return branch(key, self, state, self._objects)
 
     def branches(self):
-        return ((k.id, v) for (k, v) in self.find(Branch))
+        return self.find(Branch)
 
-    def add(self, branch):
-        return self.transactionally(self._add, branch)
+    def make(self, name, **kw):
+        branch = self.branch(name).create()
+        self.transactionally(self._add, branch, **kw)
+        return branch
+
+    def configure(self, branch, owner=None, **kw):
+        kw.update(key=branch.key, owner=(owner or self.author()))
+        return self.new(Branch, kw)
 
     def remove(self, branch):
         return self.transactionally(self._remove, branch)
@@ -293,24 +314,18 @@ class repository(zipper):
     def _create(self):
         return init_commit(self)
 
-    def _branches(self):
-        return self.get('branches')
-
-    def _add(self, branch):
-        with message('Add branch %r.' % branch.name):
-            return self.commit({ branch.key: self._config(branch) })
+    def _add(self, branch, **kw):
+        with message('Add branch %s.' % branch.name):
+            return self.commit({ branch.key: self.configure(branch, **kw) })
 
     def _remove(self, branch):
-        with message('Remove branch %r.' % branch.name):
+        with message('Remove branch %s.' % branch.name):
             return self.commit({ branch.key: Deleted })
 
     def _qualify(self, name):
         if not name.startswith('refs/'):
             name = 'refs/%s/' % name.strip('/')
         return name
-
-    def _config(self, branch):
-        return Branch(self.author(), BranchConfig())
 
 class branch(zipper):
     """A branch keeps state in a private keyspace and uses a common
@@ -332,9 +347,13 @@ class branch(zipper):
     def config(self):
         return self.repo.get(self.key)
 
-    def create(self):
-        self.repo.add(super(branch, self).create())
-        return self
+    @property
+    def owner(self):
+        return self.config.owner
+
+    @property
+    def publish(self):
+        return self.config.publish
 
 
 ### Marshalling
@@ -349,171 +368,26 @@ avro.require('repo.json')
 ## Each Branch record describes the branch's owner and configuration
 ## information.
 
-class Branch(avro.structure('M.branch')):
+class Branch(value('branch')):
     """Branch configuration is stored in the repository."""
+
+    __slots__ = ('_key', )
+
+    def __repr__(self):
+        return '<%s %s>' % (self.__kind__, self.name)
+
+    def __json__(self):
+        return update(super(Branch, self).__json__(), _name=self.name)
+
+    @property
+    def name(self):
+        return self._key.id
 
 BranchConfig = avro.map(avro.string)
 
 ## The main purpose of a zipper is to make a "logical" key/value space
 ## over a shared "static" space.  It does this by keeping a mapping of
 ## <logical-key, static-reference> items.
-
-## A key could simply be a string.  To facilite direct references and
-## indexing, this Key type may be used instead.  It's primary
-## representation is a base64-encoded binary avro <type-name, id>
-## pair.
-
-class Key(avro.structure('M.key', weak=True)):
-    """A Key identifies values in the logical address space.
-
-    >>> k1 = Key.make('Foo')
-    >>> k2 = Key.make('Foo')
-    >>> k3 = Key.make('Foo', 'bar'); k3
-    key('BkZvbwIGYmFy')
-    >>> k1 is not k2
-    True
-    >>> k2 is Key(str(k2))
-    True
-    >>> k3 is Key.make('Foo', 'bar')
-    True
-    >>> k3 is Key('BkZvbwIGYmFy')
-    True
-    >>> k3.kind
-    u'Foo'
-    >>> k3.id
-    u'bar'
-    >>> avro.cast('BkZvbwIGYmFy', Key)
-    key('BkZvbwIGYmFy')
-    """
-
-    __slots__ = ('_encoded', )
-
-    ## There are lots of Keys; intern them to avoid some object
-    ## allocation.
-
-    INTERNED = weakref.WeakValueDictionary()
-
-    def __new__(cls, encoded):
-        encoded = str(encoded)
-        try:
-            return cls.INTERNED[encoded]
-        except KeyError:
-            return cls._decode(encoded)
-
-    ## By default, the constructor would set self.kind to the first
-    ## argument given.  Do nothing, initialization happens in make().
-
-    def __init__(self, encoded):
-        pass
-
-    def __repr__(self):
-        return '%s(%r)' % (type(self).__name__, str(self))
-
-    def __str__(self):
-        if self._encoded is None:
-            self._encoded = self._encode()
-        return self._encoded
-
-    def __json__(self):
-        return str(self)
-
-    ## Define encode() to allow the avro DatumWriter to write this as
-    ## a string.
-
-    def encode(self, encoding):
-        assert encoding == 'utf-8', 'Expected UTF-8, not: %r.' % encoding
-        return str(self)
-
-    ## Most of the time, a Key is treated opaquely.  Use its string
-    ## representation for hashing and equality.
-
-    def __hash__(self):
-        return hash(str(self))
-
-    def __eq__(self, other):
-        return self._compare(operator.eq, other)
-
-    def __ne__(self, other):
-        return self._compare(operator.ne, other)
-
-    def __lt__(self, other):
-        return self._compare(operator.lt, other)
-
-    def __le__(self, other):
-        return self._compare(operator.le, other)
-
-    def __gt__(self, other):
-        return self._compare(operator.gt, other)
-
-    def __ge__(self, other):
-        return self._compare(operator.ge, other)
-
-    def _compare(self, op, other):
-        if isinstance(other, Key):
-            other = str(other)
-        if isinstance(other, basestring):
-            return op(str(self), other)
-        return NotImplemented
-
-    ## Since Keys are interned, copying is a no-op.
-
-    def __copy__(self):
-        return self
-
-    def __deepcopy__(self, memo):
-        return self
-
-    @classmethod
-    def __adapt__(cls, obj):
-        if isinstance(obj, basestring):
-            return cls(obj)
-        elif isinstance(obj, dict):
-            return cls.__restore__(obj)._intern()
-
-    ## Extra properties
-
-    @property
-    def type(self):
-        return avro.get_type(self.kind)
-
-    ## Creating a Key directly is unusual, so make() is a second-class
-    ## constructor
-
-    @classmethod
-    def make(cls, kind, id=None, name=None):
-        self = object.__new__(cls)
-        if not isinstance(kind, basestring):
-            kind = avro.type_name(kind, True)
-        self.kind = avro.string(kind)
-        if name is not None:
-            self.id = avro.string(name)
-        else:
-            self.id = avro.cast(id, _id) if id else _uuid(uuid.uuid4().bytes)
-        return self._intern()
-
-    def _intern(self):
-        self._encoded = None
-        return self.INTERNED.setdefault(str(self), self)
-
-    ## Use a base64 encoded binary Avro value as the opaque
-    ## representation.
-
-    @classmethod
-    def _decode(cls, enc):
-        pad = len(enc) % 4
-        enc = str(enc) + '=' * (4 - pad) if pad else enc
-        data = base64.urlsafe_b64decode(enc)
-        return avro.loads_binary(data, cls=cls, unbox=None, header=False)
-
-    def _encode(self):
-        data = avro.dumps_binary(self, box=None, header=False)
-        return base64.urlsafe_b64encode(data).rstrip('=')
-
-class _uuid(avro.fixed('M.uuid')):
-    """The id field of most keys is a uuid."""
-
-class _id(avro.union(_uuid, avro.string)):
-    """But it may also be a name."""
 
 ## Keys map to references in the static space.
 

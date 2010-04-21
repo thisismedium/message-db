@@ -8,14 +8,30 @@ import re
 from md import abc
 from md.prelude import *
 from ..query import tree
-from . import api, _tree, path_query
-from ._tree import *; from ._tree import content
+from .. import avro, data
+from . import api, path_query
 
-__all__ = _tree.__all__ + (
-    'Item', 'Folder', 'Site', 'Subdomain', 'Page',
+__all__ = (
+    'Key', 'Item', 'Folder', 'Site', 'Subdomain', 'Page',
+    'get_type', 'type_name', 'text', 'html',
     'root', 'query', 'path', 'resolve',
     'make', 'add', 'save', 'remove'
 )
+
+
+### Types
+
+avro.require('tree.json')
+
+Key = data.Key
+content = data.value
+
+get_type = avro.get_type
+
+def type_name(obj, *args, **kw):
+    if isinstance(obj, basestring):
+        return obj
+    return avro.type_name(obj, *args, **kw)
 
 
 ### Content Tree
@@ -104,13 +120,31 @@ class Page(content('Page')):
     pass
 
 
+### Extra Types
+
+## These types aren't used directly, but are defined here because they
+## are declared in the external schema.  If the avro package supports
+## automatic creation of non-record types in the future, these can be
+## removed.
+
+class text(avro.primitive('M.text', avro.string)):
+    """Text is a multiline string type."""
+
+class html(avro.primitive('M.html', avro.string)):
+    """Marked-up text."""
+
+_folder = avro.union(Key, None)
+
+_content = avro.omap(Key)
+
+
 ### Traversal
 
 ## The query() method is a generalized way to traverse the content
 ## tree using XPath-style queries.  Additionally, resolve() can be
 ## used to resolve a simple path to a specific item.
 
-ROOT = _tree.Key.make(Site, 'root')
+ROOT = data.Key.make(Site, 'root')
 
 def root():
     return api.get(ROOT)

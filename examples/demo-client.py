@@ -15,12 +15,21 @@ Example:
 ./demo-client.py set-item '[{ "method": "remove", "data": { "_path": "/example" } }]'
 ./demo-client.py get-item '*'
 
+./demo-client.py get-schema 'Page'
+
 ./demo-client.py get-user ''
 ./demo-client.py get-user 'user'
 ./demo-client.py set-user '[{ "method": "create", "data": { "name": "new", "email": "new@localhost", "password": "hello" }}]'
 ./demo-client.py get-user ''
 ./demo-client.py set-user '[{ "method": "save", "data": { "_key": "DE0uVXNlcgIGbmV3", "admin": true }}]'
 ./demo-client.py set-user '[{ "method": "remove", "data": { "_key": "DE0uVXNlcgIGbmV3" }}]'
+
+./demo-client.py get-branch ''
+./demo-client.py get-branch 'staging'
+./demo-client.py set-branch '[{ "method": "create", "data": { "_name": "some-branch" }}]'
+./demo-client.py get-branch ''
+./demo-client.py set-branch '[{ "method": "save", "data": {"_key": "EE0uYnJhbmNoAhZzb21lLWJyYW5jaA", "config": {}, "owner": "user", "publish": "user"}}]'
+./demo-client.py set-branch '[{ "method": "remove", "data": {"_key": "EE0uYnJhbmNoAhZzb21lLWJyYW5jaA"}}]'
 """
 
 import os, sys, xmpp, socket, base64

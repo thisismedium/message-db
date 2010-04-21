@@ -7,14 +7,14 @@ from __future__ import absolute_import
 import sasl
 from md.prelude import *
 from md import fluid
-from .. import avro
-from . import _tree, api
+from .. import avro, data
+from . import api
 
 __all__ = (
     'User', 'identifier', 'email', 'password',
     'list_users', 'get_user', 'valid_user', 'is_admin',
     'user', 'set_user', 'authenticator', 'author',
-    'user_delta', 'make_user', 'save_user', 'remove_user',
+    'user_transaction', 'make_user', 'save_user', 'remove_user',
     'LocalAuth'
 )
 
@@ -23,7 +23,7 @@ __all__ = (
 
 avro.require('auth.json')
 
-class User(_tree.content('User')):
+class User(data.value('User')):
 
     def __init__(self, **kw):
         super(User, self).__init__(**kw)
@@ -69,13 +69,15 @@ _roles = avro.set(avro.string)
 
 ### User Traversal
 
+source = api.repository
+user_transaction = api.repository_transaction
+
 def list_users():
-    return api.find(User)
+    return api.find(User, source())
 
 def get_user(name, require=False):
-    ## FIXME: Change this to get from the repository once repositories
-    ## and branches are implemented.
-    user = api.get(_tree.Key.make(User, name=identifier.normalize(name)))
+    key = data.Key.make(User, name=identifier.normalize(name))
+    user = api.get(key, source())
     if require and not user:
         raise ValueError('User does not exist: %r.' % name)
     return user
@@ -114,14 +116,11 @@ def author():
 
     user = CURRENT_USER.value
     if user is not fluid.UNDEFINED:
-        return user.display_name()
-    return 'Anonymous <nobody@example.net>'
+        return user.name
+    return 'anonymous'
 
 
 ### User Manipulation
-
-def user_delta(message):
-    return api.delta(message)
 
 def make_user(_kind=None, **kw):
     name = kw.get('name')
@@ -129,7 +128,12 @@ def make_user(_kind=None, **kw):
         raise TypeError("Missing required 'name' parameter.")
     if get_user(name):
         raise NameError('User already exists: %r.' % name)
-    return api.new(_kind or User, update(kw, key_name=name))
+
+    kw.setdefault('branch', name)
+    user = api.new(_kind or User, update(kw, key_name=name))
+    if not api.get_branch(user.branch):
+        api.make_branch(user.branch, owner=user, force=True)
+    return user
 
 def save_user(user, *args, **kw):
     if not user:

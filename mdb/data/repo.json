@@ -1,20 +1,10 @@
-{ "type": "fixed", "name": "M.uuid", "size": 16 }
-
-{
-    "type": "record",
-    "name": "M.key",
-    "fields": [
-        { "name": "kind", "type": "string" },
-        { "name": "id", "type": [ "M.uuid", "string" ] }
-    ]
-}
-
 {
     "type": "record",
     "name": "M.branch",
     "fields": [
-        { "type": "string", "name": "author" },
-        { "type": { "type": "map", "values": "string" }, "name": "config" }
+        { "type": "string", "name": "owner" },
+	{ "type": "string", "name": "publish", "default": "" },
+        { "type": { "type": "map", "values": "string" }, "name": "config", "default": {} }
     ]
 }
 
